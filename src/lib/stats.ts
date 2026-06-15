@@ -108,6 +108,109 @@ export function computeStats(session: UnifiedSession): SessionStats {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Trace span model (distributed-tracing style waterfall)
+// ---------------------------------------------------------------------------
+
+export interface TraceSpan {
+  node: SessionNode;
+  depth: number;
+  /** ms from session start */
+  start: number;
+  /** inferred ms duration (gap to the next chronological event) */
+  duration: number;
+  hasChildren: boolean;
+}
+
+export interface Trace {
+  spans: TraceSpan[];
+  totalMs: number;
+}
+
+function childMap(nodes: SessionNode[]): {
+  childrenOf: Map<string | null, SessionNode[]>;
+  byId: Map<string, SessionNode>;
+} {
+  const byId = new Map<string, SessionNode>();
+  for (const n of nodes) byId.set(n.id, n);
+  const childrenOf = new Map<string | null, SessionNode[]>();
+  for (const n of nodes) {
+    const key = n.parentId && byId.has(n.parentId) ? n.parentId : null;
+    if (!childrenOf.has(key)) childrenOf.set(key, []);
+    childrenOf.get(key)!.push(n);
+  }
+  return { childrenOf, byId };
+}
+
+// Tree order (DFS) with depth, but bar geometry driven by real time: each span's
+// duration is the gap to the next chronological event. This is the agent-trace
+// equivalent of a Jaeger/Honeycomb span waterfall.
+export function buildTrace(session: UnifiedSession): Trace {
+  const start = session.startedAt ? Date.parse(session.startedAt) : null;
+  const end = session.endedAt ? Date.parse(session.endedAt) : null;
+
+  // Chronological gaps → per-node start + duration.
+  const timed = session.nodes
+    .filter((n) => n.timestamp)
+    .map((n) => ({ id: n.id, t: Date.parse(n.timestamp!) }))
+    .sort((a, b) => a.t - b.t);
+  const base = start ?? (timed.length ? timed[0].t : 0);
+  const span = new Map<string, { start: number; duration: number }>();
+  for (let i = 0; i < timed.length; i++) {
+    const next = i < timed.length - 1 ? timed[i + 1].t : end ?? timed[i].t;
+    span.set(timed[i].id, {
+      start: timed[i].t - base,
+      duration: Math.max(0, next - timed[i].t),
+    });
+  }
+
+  const { childrenOf } = childMap(session.nodes);
+  const spans: TraceSpan[] = [];
+  const visit = (n: SessionNode, depth: number, parentStart: number) => {
+    const s = span.get(n.id) ?? { start: parentStart, duration: 0 };
+    const kids = childrenOf.get(n.id) ?? [];
+    spans.push({ node: n, depth, start: s.start, duration: s.duration, hasChildren: kids.length > 0 });
+    for (const c of kids) visit(c, depth + 1, s.start);
+  };
+  for (const root of childrenOf.get(null) ?? []) visit(root, 0, 0);
+
+  const totalMs =
+    start != null && end != null
+      ? end - start
+      : spans.reduce((m, s) => Math.max(m, s.start + s.duration), 1);
+  return { spans, totalMs: totalMs || 1 };
+}
+
+// ---------------------------------------------------------------------------
+// Hierarchy for the cost icicle / flame graph (weight = tokens)
+// ---------------------------------------------------------------------------
+
+export interface HierNode {
+  node: SessionNode | null;
+  /** self weight (own tokens) */
+  self: number;
+  children: HierNode[];
+}
+
+export function nodeTokens(n: SessionNode): number {
+  return n.tokens ? n.tokens.input + n.tokens.output : 0;
+}
+
+/** Build a single rooted hierarchy (synthetic root) weighted by token cost. */
+export function buildHierarchy(session: UnifiedSession): HierNode {
+  const { childrenOf } = childMap(session.nodes);
+  const build = (n: SessionNode): HierNode => ({
+    node: n,
+    self: nodeTokens(n),
+    children: (childrenOf.get(n.id) ?? []).map(build),
+  });
+  return {
+    node: null,
+    self: 0,
+    children: (childrenOf.get(null) ?? []).map(build),
+  };
+}
+
 export function fmtDuration(ms: number): string {
   if (ms <= 0) return "—";
   const s = Math.round(ms / 1000);

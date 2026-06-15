@@ -1,0 +1,4 @@
+# Register the first-party Tailwind plugin for Bun's dev server / static routes.
+# This is the only place plugins can be wired for `Bun.serve`'s HTML bundling.
+[serve.static]
+plugins = ["bun-plugin-tailwind"]

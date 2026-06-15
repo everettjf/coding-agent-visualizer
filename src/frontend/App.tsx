@@ -1,4 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
+import { Tabs } from "radix-ui";
+import {
+  Network,
+  AlignHorizontalDistributeCenter,
+  Flame,
+  Clock,
+  Files as FilesIcon,
+  BarChart3,
+  MessageSquare,
+  RefreshCw,
+  type LucideIcon,
+} from "lucide-react";
 import type { SessionSummary, SessionNode, UnifiedSession, Source } from "../lib/types";
 import { fmtTokens } from "../lib/stats";
 import { GraphView } from "./GraphView";
@@ -7,15 +19,26 @@ import { StatsView } from "./views/StatsView";
 import { TimelineView } from "./views/TimelineView";
 import { FilesView } from "./views/FilesView";
 import { TranscriptView } from "./views/TranscriptView";
+import { WaterfallView } from "./views/WaterfallView";
+import { FlameView } from "./views/FlameView";
 import { SourceBadge } from "./ui";
 
-type ViewKey = "graph" | "timeline" | "files" | "stats" | "transcript";
-const VIEWS: { key: ViewKey; label: string }[] = [
-  { key: "graph", label: "Graph" },
-  { key: "timeline", label: "Timeline" },
-  { key: "files", label: "Files" },
-  { key: "stats", label: "Stats" },
-  { key: "transcript", label: "Transcript" },
+type ViewKey =
+  | "graph"
+  | "waterfall"
+  | "flame"
+  | "timeline"
+  | "files"
+  | "stats"
+  | "transcript";
+const VIEWS: { key: ViewKey; label: string; icon: LucideIcon }[] = [
+  { key: "graph", label: "Graph", icon: Network },
+  { key: "waterfall", label: "Waterfall", icon: AlignHorizontalDistributeCenter },
+  { key: "flame", label: "Flame", icon: Flame },
+  { key: "timeline", label: "Timeline", icon: Clock },
+  { key: "files", label: "Files", icon: FilesIcon },
+  { key: "stats", label: "Stats", icon: BarChart3 },
+  { key: "transcript", label: "Transcript", icon: MessageSquare },
 ];
 
 function fmtTime(ts: string | null): string {
@@ -148,7 +171,21 @@ export function App() {
           </div>
         </div>
         <div className="session-list">
-          {loading && <div className="muted pad">Scanning local sessions…</div>}
+          {loading && (
+            <div className="scanning">
+              <div className="scanning-head">
+                <span className="spinner" />
+                <span className="muted small">Scanning local sessions…</span>
+              </div>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="skeleton-item">
+                  <div className="sk sk-line" style={{ width: "40%" }} />
+                  <div className="sk sk-line" style={{ width: "85%" }} />
+                  <div className="sk sk-line" style={{ width: "55%" }} />
+                </div>
+              ))}
+            </div>
+          )}
           {!loading && !filtered.length && (
             <div className="muted pad">No sessions found.</div>
           )}
@@ -212,23 +249,44 @@ export function App() {
                 {selected.messageCount} msgs · {selected.toolCallCount} tools ·{" "}
                 {fmtTokens(selected.totalTokens)} tokens
               </div>
-              <nav className="tabs">
-                {VIEWS.map((v) => (
-                  <button
-                    key={v.key}
-                    className={`tab ${view === v.key ? "tab-on" : ""}`}
-                    onClick={() => setView(v.key)}
-                  >
-                    {v.label}
-                  </button>
-                ))}
-              </nav>
+              <Tabs.Root value={view} onValueChange={(v) => setView(v as ViewKey)}>
+                <Tabs.List className="-mb-px flex flex-wrap gap-1" aria-label="Views">
+                  {VIEWS.map((v) => {
+                    const Icon = v.icon;
+                    return (
+                      <Tabs.Trigger
+                        key={v.key}
+                        value={v.key}
+                        className="inline-flex items-center gap-1.5 rounded-t-md border-b-2 border-transparent px-3 py-2 text-sm text-muted transition-colors hover:text-text data-[state=active]:border-accent data-[state=active]:text-text"
+                      >
+                        <Icon size={14} />
+                        {v.label}
+                      </Tabs.Trigger>
+                    );
+                  })}
+                </Tabs.List>
+              </Tabs.Root>
             </header>
             <div className="view-area">
               {!session ? (
-                <div className="muted pad">Loading…</div>
+                <div className="loading-center">
+                  <span className="spinner spinner-lg" />
+                  <span className="muted small">Building visualization…</span>
+                </div>
               ) : view === "graph" ? (
                 <GraphView
+                  session={session}
+                  activeId={activeNode?.id ?? null}
+                  onSelect={setActiveNode}
+                />
+              ) : view === "waterfall" ? (
+                <WaterfallView
+                  session={session}
+                  activeId={activeNode?.id ?? null}
+                  onSelect={setActiveNode}
+                />
+              ) : view === "flame" ? (
+                <FlameView
                   session={session}
                   activeId={activeNode?.id ?? null}
                   onSelect={setActiveNode}

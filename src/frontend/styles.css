@@ -1,3 +1,24 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Expose the app palette to Tailwind v4 utilities (bg-panel, text-muted,
+   border-border, text-role-tool, …) so we can drop most hand-written CSS. */
+@theme {
+  --color-bg: #0d0f14;
+  --color-panel: #151821;
+  --color-panel-2: #1b1f2a;
+  --color-border: #262b38;
+  --color-text: #e6e9f0;
+  --color-muted: #8a92a6;
+  --color-accent: #4f9cf9;
+
+  --color-role-user: #4f9cf9;
+  --color-role-assistant: #22c55e;
+  --color-role-reasoning: #a78bfa;
+  --color-role-tool: #f59e0b;
+  --color-role-system: #64748b;
+}
+
 :root {
   --bg: #0d0f14;
   --panel: #151821;
@@ -160,49 +181,6 @@ body {
   border-radius: 4px;
 }
 
-/* Graph nodes */
-.gnode {
-  background: var(--panel-2);
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 10px;
-  width: 190px;
-  font-size: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-.gnode-active {
-  box-shadow: 0 0 0 2px var(--accent);
-}
-.gnode-side {
-  border-style: dashed;
-}
-.gnode-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.gnode-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-}
-.gnode-label {
-  font-weight: 600;
-}
-.gnode-tok {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 11px;
-}
-.gnode-preview {
-  margin-top: 5px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* Detail panel */
 .detail {
   position: fixed;
@@ -351,28 +329,6 @@ body {
 .head-sub {
   margin-top: 2px;
 }
-.tabs {
-  display: flex;
-  gap: 4px;
-  margin-top: 10px;
-}
-.tab {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  padding: 7px 14px;
-  border-radius: 8px 8px 0 0;
-  cursor: pointer;
-  font-size: 13px;
-  border-bottom: 2px solid transparent;
-}
-.tab:hover {
-  color: var(--text);
-}
-.tab-on {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
 
 /* ===== View area ===== */
 .view-area {
@@ -401,127 +357,6 @@ body {
 .empty-inline {
   padding: 40px;
   text-align: center;
-}
-
-/* ===== Graph toolbar ===== */
-.graph-wrap {
-  position: relative;
-  height: 100%;
-}
-.graph-toolbar {
-  position: absolute;
-  z-index: 5;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  pointer-events: none;
-}
-.graph-search,
-.role-toggles,
-.role-toggle {
-  pointer-events: auto;
-}
-.graph-search {
-  background: rgba(21, 24, 33, 0.92);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 11px;
-  color: var(--text);
-  outline: none;
-  width: 220px;
-  backdrop-filter: blur(6px);
-}
-.graph-search:focus {
-  border-color: var(--accent);
-}
-.role-toggles {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.role-toggle {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: rgba(21, 24, 33, 0.92);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 5px 10px;
-  color: var(--text);
-  font-size: 11px;
-  cursor: pointer;
-  backdrop-filter: blur(6px);
-}
-.role-toggle.off {
-  opacity: 0.4;
-  text-decoration: line-through;
-}
-.gnode-dim {
-  opacity: 0.25;
-}
-
-/* ===== Stat cards ===== */
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
-  margin-bottom: 18px;
-}
-.stat-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-top: 3px solid var(--accent);
-  border-radius: 12px;
-  padding: 14px 16px;
-}
-.stat-value {
-  font-size: 24px;
-  font-weight: 700;
-}
-.stat-label {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 2px;
-}
-.stat-sub {
-  margin-top: 4px;
-}
-
-/* ===== Bars / tools ===== */
-.bar-track {
-  flex: 1;
-  height: 8px;
-  background: var(--panel-2);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.bar-fill {
-  height: 100%;
-  border-radius: 999px;
-}
-.tool-list {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-.tool-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.tool-name {
-  width: 140px;
-  font-size: 13px;
-  font-family: ui-monospace, Menlo, monospace;
-}
-.tool-count {
-  width: 80px;
-  text-align: right;
-  font-size: 12px;
-  color: var(--muted);
 }
 .err {
   color: #f87171;
@@ -775,4 +610,83 @@ body {
   0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
   70% { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); }
   100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+/* ===== Loading: spinner + skeletons ===== */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  flex: none;
+  animation: spin 0.7s linear infinite;
+}
+.spinner-lg {
+  width: 26px;
+  height: 26px;
+  border-width: 3px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.scanning {
+  display: flex;
+  flex-direction: column;
+}
+.scanning-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 10px;
+}
+
+.loading-center {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px;
+}
+
+.skeleton-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sk {
+  border-radius: 5px;
+  background: linear-gradient(
+    100deg,
+    var(--panel-2) 30%,
+    var(--border) 50%,
+    var(--panel-2) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+.sk-line {
+  height: 9px;
+}
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .sk {
+    animation: none;
+  }
 }

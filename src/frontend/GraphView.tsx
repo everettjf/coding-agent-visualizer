@@ -11,92 +11,211 @@ import {
   Position,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import Dagre from "@dagrejs/dagre";
 import type { SessionNode, UnifiedSession, NodeRole } from "../lib/types";
-import { roleColor, roleLabel } from "./ui";
+import { roleColor, roleLabel, nodeIcon } from "./ui";
 
-const X_GAP = 230;
-const Y_GAP = 88;
 const ALL_ROLES: NodeRole[] = ["user", "assistant", "reasoning", "tool", "system"];
+type Dir = "LR" | "TB";
+
+const NODE_W = 240;
+const NODE_BASE_H = 56;
 
 interface GraphNodeData extends Record<string, unknown> {
   node: SessionNode;
+  tools: SessionNode[];
   active: boolean;
   dimmed: boolean;
+  onPickTool: (n: SessionNode) => void;
+}
+
+function estimateHeight(d: { tools: SessionNode[]; node: SessionNode }): number {
+  const preview = d.node.text ?? d.node.thinking ?? "";
+  let h = NODE_BASE_H;
+  if (preview) h += 18;
+  if (d.tools.length) h += 26;
+  return h;
 }
 
 function AgentNode({ data }: NodeProps) {
-  const { node, active, dimmed } = data as GraphNodeData;
+  const { node, tools, active, dimmed, onPickTool } = data as GraphNodeData;
   const color = roleColor(node.role);
-  const label = node.role === "tool" ? node.tool?.name ?? "tool" : roleLabel(node.role);
-  const preview =
-    node.role === "tool"
-      ? node.tool?.files?.join(", ") ?? ""
-      : (node.text ?? node.thinking ?? "").replace(/\s+/g, " ").slice(0, 70);
+  const Icon = nodeIcon(node.role, node.tool?.name);
+  const label = roleLabel(node.role);
+  const preview = (node.text ?? node.thinking ?? "")
+    .replace(/\s+/g, " ")
+    .slice(0, 80);
+  const tokens = node.tokens ? node.tokens.input + node.tokens.output : 0;
 
   return (
     <div
-      className={`gnode ${active ? "gnode-active" : ""} ${node.isSidechain ? "gnode-side" : ""} ${dimmed ? "gnode-dim" : ""}`}
-      style={{ borderColor: color }}
+      className={`rounded-xl border-[1.5px] bg-panel-2 px-2.5 py-2 text-xs shadow-lg transition-opacity ${
+        node.isSidechain ? "border-dashed" : ""
+      } ${active ? "ring-2 ring-accent" : ""} ${dimmed ? "opacity-25" : ""}`}
+      style={{ width: NODE_W, borderColor: color }}
     >
-      <Handle type="target" position={Position.Top} />
-      <div className="gnode-head">
-        <span className="gnode-dot" style={{ background: color }} />
-        <span className="gnode-label">{label}</span>
-        {node.tokens && (
-          <span className="gnode-tok">{node.tokens.input + node.tokens.output}</span>
+      <Handle type="target" position={Position.Top} className="!opacity-0" />
+      <Handle type="target" position={Position.Left} className="!opacity-0" />
+      <div className="flex items-center gap-1.5">
+        <Icon size={13} style={{ color }} />
+        <span className="font-semibold">{label}</span>
+        {node.isSidechain && (
+          <span className="rounded bg-white/5 px-1 text-[10px] text-muted">sub-agent</span>
+        )}
+        {tokens > 0 && (
+          <span className="ml-auto text-[11px] text-muted tabular-nums">{tokens}</span>
         )}
       </div>
-      {preview && <div className="gnode-preview">{preview}</div>}
-      <Handle type="source" position={Position.Bottom} />
+      {preview && (
+        <div className="mt-1 truncate text-muted">{preview}</div>
+      )}
+      {tools.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {tools.map((t) => {
+            const TIcon = nodeIcon("tool", t.tool?.name);
+            return (
+              <button
+                key={t.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPickTool(t);
+                }}
+                title={t.tool?.files?.join(", ") || t.tool?.name}
+                className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] hover:bg-white/5 ${
+                  t.tool?.isError ? "border-red-500/50 text-red-400" : "border-border text-role-tool"
+                }`}
+              >
+                <TIcon size={10} />
+                {t.tool?.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <Handle type="source" position={Position.Bottom} className="!opacity-0" />
+      <Handle type="source" position={Position.Right} className="!opacity-0" />
     </div>
   );
 }
 
 const nodeTypes = { agent: AgentNode };
 
-function layout(session: UnifiedSession): {
-  nodes: { node: SessionNode; x: number; y: number }[];
-  edges: Edge[];
-} {
-  const childrenOf = new Map<string | null, SessionNode[]>();
-  const byId = new Map<string, SessionNode>();
-  for (const n of session.nodes) byId.set(n.id, n);
-  for (const n of session.nodes) {
-    const key = n.parentId && byId.has(n.parentId) ? n.parentId : null;
-    if (!childrenOf.has(key)) childrenOf.set(key, []);
-    childrenOf.get(key)!.push(n);
-  }
-
-  const positioned: { node: SessionNode; x: number; y: number }[] = [];
-  let order = 0;
-  const visit = (n: SessionNode, depth: number) => {
-    positioned.push({ node: n, x: depth * X_GAP, y: order++ * Y_GAP });
-    for (const c of childrenOf.get(n.id) ?? []) visit(c, depth + 1);
-  };
-  for (const root of childrenOf.get(null) ?? []) visit(root, 0);
-
-  const edges: Edge[] = [];
-  for (const n of session.nodes) {
-    if (n.parentId && byId.has(n.parentId)) {
-      edges.push({
-        id: `${n.parentId}->${n.id}`,
-        source: n.parentId,
-        target: n.id,
-        type: "smoothstep",
-        style: { stroke: "#3a3f4b" },
-      });
-    }
-  }
-  return { nodes: positioned, edges };
+interface AnchorNode {
+  node: SessionNode;
+  tools: SessionNode[];
 }
 
-function matches(node: SessionNode, q: string): boolean {
+// Turn the raw 200-node forest into a readable graph:
+//   1. fold tool nodes into their turn as chips,
+//   2. merge tool-only assistant turns into the previous content-bearing turn
+//      ("chain compaction" — the single biggest readability win),
+//   3. reconnect the fragments (parentUuid breaks where carrier entries were
+//      dropped) into one chronological spine, preserving real sub-agent branches,
+//   4. lay it out with dagre (LR/TB) instead of the depth×order staircase.
+function layout(
+  session: UnifiedSession,
+  dir: Dir,
+): {
+  graphNodes: AnchorNode[];
+  edges: Edge[];
+  pos: Map<string, { x: number; y: number; h: number }>;
+} {
+  const byId = new Map<string, SessionNode>();
+  for (const n of session.nodes) byId.set(n.id, n);
+
+  const toolsByParent = new Map<string, SessionNode[]>();
+  for (const n of session.nodes) {
+    if (n.role === "tool" && n.parentId) {
+      if (!toolsByParent.has(n.parentId)) toolsByParent.set(n.parentId, []);
+      toolsByParent.get(n.parentId)!.push(n);
+    }
+  }
+
+  const hasContent = (n: SessionNode) =>
+    !!(n.text?.trim() || n.thinking?.trim()) || n.role === "user";
+
+  // Build anchors in document (chronological) order, merging tool-only turns.
+  const anchors: AnchorNode[] = [];
+  const anchorIdOf = new Map<string, string>(); // any node id -> its anchor id
+  let current: AnchorNode | null = null;
+  for (const n of session.nodes) {
+    if (n.role === "tool") continue;
+    const tools = toolsByParent.get(n.id) ?? [];
+    // A tool-only assistant turn folds into the running anchor.
+    if (current && !hasContent(n) && !n.isSidechain && current.node.role !== "user") {
+      current.tools.push(...tools);
+      anchorIdOf.set(n.id, current.node.id);
+      continue;
+    }
+    current = { node: n, tools: [...tools] };
+    anchors.push(current);
+    anchorIdOf.set(n.id, n.id);
+  }
+
+  const anchorIds = new Set(anchors.map((a) => a.node.id));
+  const resolveAnchor = (id: string | null | undefined): string | null => {
+    let cur = id;
+    const guard = new Set<string>();
+    while (cur && !guard.has(cur)) {
+      guard.add(cur);
+      const a = anchorIdOf.get(cur);
+      if (a && anchorIds.has(a)) return a;
+      cur = byId.get(cur)?.parentId ?? null;
+    }
+    return null;
+  };
+
+  // Edges: real parent when resolvable, else chain to the previous anchor so the
+  // dropped-carrier fragments form one connected flow.
+  const edges: Edge[] = [];
+  const seen = new Set<string>();
+  let prev: string | null = null;
+  for (const a of anchors) {
+    const real = resolveAnchor(a.node.parentId);
+    const source: string | null = real && real !== a.node.id ? real : prev;
+    if (source && source !== a.node.id) {
+      const id = `${source}->${a.node.id}`;
+      if (!seen.has(id)) {
+        seen.add(id);
+        edges.push({
+          id,
+          source,
+          target: a.node.id,
+          type: "smoothstep",
+          animated: a.node.isSidechain,
+          style: { stroke: a.node.isSidechain ? "#a78bfa" : "#3a3f4b" },
+        });
+      }
+    }
+    prev = a.node.id;
+  }
+
+  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: dir, ranksep: dir === "LR" ? 70 : 48, nodesep: 26 });
+  for (const a of anchors) {
+    g.setNode(a.node.id, { width: NODE_W, height: estimateHeight(a) });
+  }
+  for (const e of edges) g.setEdge(e.source, e.target);
+  Dagre.layout(g);
+
+  const pos = new Map<string, { x: number; y: number; h: number }>();
+  for (const a of anchors) {
+    const gn = g.node(a.node.id);
+    if (gn) pos.set(a.node.id, { x: gn.x - gn.width / 2, y: gn.y - gn.height / 2, h: gn.height });
+  }
+
+  return { graphNodes: anchors, edges, pos };
+}
+
+function matches(node: SessionNode, tools: SessionNode[], q: string): boolean {
   if (!q) return false;
   const hay = [
     node.text,
     node.thinking,
-    node.tool?.name,
-    typeof node.tool?.input === "string" ? node.tool.input : JSON.stringify(node.tool?.input ?? ""),
+    ...tools.map((t) => t.tool?.name),
+    ...tools.map((t) =>
+      typeof t.tool?.input === "string" ? t.tool.input : JSON.stringify(t.tool?.input ?? ""),
+    ),
   ]
     .join(" ")
     .toLowerCase();
@@ -114,29 +233,29 @@ export function GraphView({
 }) {
   const [hidden, setHidden] = useState<Set<NodeRole>>(new Set());
   const [search, setSearch] = useState("");
-  const base = useMemo(() => layout(session), [session]);
-
-  const byId = useMemo(() => {
-    const m = new Map<string, SessionNode>();
-    for (const n of session.nodes) m.set(n.id, n);
-    return m;
-  }, [session]);
+  const [dir, setDir] = useState<Dir>("LR");
+  const base = useMemo(() => layout(session, dir), [session, dir]);
 
   const nodes: Node[] = useMemo(() => {
-    const searching = search.trim().length > 0;
-    return base.nodes
+    const q = search.trim();
+    return base.graphNodes
       .filter(({ node }) => !hidden.has(node.role))
-      .map(({ node, x, y }) => ({
-        id: node.id,
-        type: "agent",
-        position: { x, y },
-        data: {
-          node,
-          active: node.id === activeId,
-          dimmed: searching && !matches(node, search.trim()),
-        } satisfies GraphNodeData,
-      }));
-  }, [base, hidden, activeId, search]);
+      .map(({ node, tools }) => {
+        const p = base.pos.get(node.id) ?? { x: 0, y: 0, h: NODE_BASE_H };
+        return {
+          id: node.id,
+          type: "agent",
+          position: { x: p.x, y: p.y },
+          data: {
+            node,
+            tools: hidden.has("tool") ? [] : tools,
+            active: node.id === activeId,
+            dimmed: q.length > 0 && !matches(node, tools, q),
+            onPickTool: onSelect,
+          } satisfies GraphNodeData,
+        };
+      });
+  }, [base, hidden, activeId, search, onSelect]);
 
   const visibleIds = useMemo(() => new Set(nodes.map((n) => n.id)), [nodes]);
   const edges = useMemo(
@@ -152,38 +271,48 @@ export function GraphView({
     });
 
   return (
-    <div className="graph-wrap">
-      <div className="graph-toolbar">
+    <div className="relative h-full">
+      <div className="absolute left-3 top-3 z-10 flex flex-wrap items-center gap-2">
         <input
-          className="graph-search"
+          className="w-56 rounded-lg border border-border bg-panel-2/90 px-3 py-1.5 text-sm outline-none backdrop-blur focus:border-accent"
           placeholder="Highlight nodes…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="role-toggles">
+        <div className="flex flex-wrap gap-1.5">
           {ALL_ROLES.map((r) => (
             <button
               key={r}
-              className={`role-toggle ${hidden.has(r) ? "off" : ""}`}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs backdrop-blur transition-opacity ${
+                hidden.has(r) ? "opacity-40" : ""
+              }`}
               style={{ borderColor: roleColor(r) }}
               onClick={() => toggle(r)}
               title={hidden.has(r) ? `Show ${r}` : `Hide ${r}`}
             >
-              <span className="gnode-dot" style={{ background: roleColor(r) }} />
+              <span className="h-2 w-2 rounded-full" style={{ background: roleColor(r) }} />
               {roleLabel(r)}
             </button>
           ))}
         </div>
+        <button
+          className="rounded-full border border-border bg-panel-2/90 px-2.5 py-1 text-xs backdrop-blur hover:border-accent"
+          onClick={() => setDir((d) => (d === "LR" ? "TB" : "LR"))}
+          title="Toggle layout direction"
+        >
+          {dir === "LR" ? "↔ Horizontal" : "↕ Vertical"}
+        </button>
       </div>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         fitView
-        minZoom={0.1}
+        fitViewOptions={{ minZoom: 0.4, maxZoom: 1 }}
+        minZoom={0.04}
         proOptions={{ hideAttribution: true }}
         onNodeClick={(_, n) => {
-          const node = byId.get(n.id);
+          const node = session.nodes.find((x) => x.id === n.id);
           if (node) onSelect(node);
         }}
         colorMode="dark"
