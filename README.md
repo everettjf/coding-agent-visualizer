@@ -131,7 +131,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to help build these.
 |---|---|
 | `bun dev` | Dev server with hot reload |
 | `bun start` | Production server |
+| `bun test` | Adapter unit tests (runs against `fixtures/`) |
 | `bun run typecheck` | TypeScript check (`tsc --noEmit`) |
+
+Both the Claude Code and Codex adapters are covered by tests in
+`src/lib/adapters/adapters.test.ts`, validated against realistic sample logs in
+`fixtures/`. The Claude Code adapter is additionally verified against real local
+sessions (graph integrity: single connected tree, tool results linked, files
+tracked).
 
 ## 🔒 Privacy
 

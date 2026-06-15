@@ -45,6 +45,18 @@ function filesFromTool(name: string, input: any): string[] | undefined {
   return out.length ? out : undefined;
 }
 
+// Normalize a tool_result `content` (string | block[]) into a display string.
+function toolResultText(content: any): string | undefined {
+  if (typeof content === "string") return content || undefined;
+  if (Array.isArray(content)) {
+    const parts = content
+      .map((b) => (typeof b === "string" ? b : typeof b?.text === "string" ? b.text : ""))
+      .filter(Boolean);
+    return parts.length ? parts.join("\n") : undefined;
+  }
+  return undefined;
+}
+
 function textFromContent(content: any): { text?: string; thinking?: string } {
   if (typeof content === "string") return { text: content };
   if (!Array.isArray(content)) return {};
@@ -77,6 +89,14 @@ export function parseClaudeCodeSession(
     }
   }
   if (!entries.length) return null;
+
+  // Raw uuid -> parentUuid for ALL entries, so that when we skip an entry
+  // (e.g. a tool_result carrier) we can still reconnect its children to the
+  // nearest surviving ancestor instead of orphaning them.
+  const rawParent = new Map<string, string | null>();
+  for (const e of entries) {
+    if (e.uuid) rawParent.set(e.uuid, e.parentUuid ?? null);
+  }
 
   const nodes: SessionNode[] = [];
   // Map a tool_use id -> node so a later tool_result can attach to it.
@@ -113,7 +133,9 @@ export function parseClaudeCodeSession(
           for (const r of results) {
             const node = toolNodeByUseId.get(r.tool_use_id);
             if (node && node.tool) {
-              node.tool.result = e.toolUseResult ?? r.content;
+              // Prefer the model-facing text (uniform & searchable); fall back to
+              // the richer structured toolUseResult when there's no text content.
+              node.tool.result = toolResultText(r.content) ?? e.toolUseResult;
               node.tool.isError = r.is_error === true;
             }
           }
@@ -181,6 +203,21 @@ export function parseClaudeCodeSession(
     }
     // attachment / system / mode / queue-operation / last-prompt are skipped
     // for the graph (they are metadata, surfaced elsewhere later).
+  }
+
+  // Reconnect nodes whose parent was a skipped entry to the nearest alive ancestor.
+  const alive = new Set(nodes.map((n) => n.id));
+  const resolveParent = (pid: string | null): string | null => {
+    let cur = pid;
+    const seen = new Set<string>();
+    while (cur && !alive.has(cur) && !seen.has(cur)) {
+      seen.add(cur);
+      cur = rawParent.get(cur) ?? null;
+    }
+    return cur && alive.has(cur) ? cur : null;
+  };
+  for (const n of nodes) {
+    if (n.parentId && !alive.has(n.parentId)) n.parentId = resolveParent(n.parentId);
   }
 
   if (!title) title = "(untitled session)";
