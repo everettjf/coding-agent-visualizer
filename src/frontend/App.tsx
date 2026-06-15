@@ -38,6 +38,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<Source | "all">("all");
   const [view, setView] = useState<ViewKey>("graph");
+  const [live, setLive] = useState(true);
 
   const loadSessions = () => {
     setLoading(true);
@@ -65,10 +66,23 @@ export function App() {
     if (!selected) return;
     setSession(null);
     setActiveNode(null);
-    fetch(`/api/session?path=${encodeURIComponent(selected.filePath)}`)
-      .then((r) => r.json())
-      .then((data: UnifiedSession) => setSession(data));
-  }, [selected]);
+    const path = encodeURIComponent(selected.filePath);
+
+    if (!live) {
+      let cancelled = false;
+      fetch(`/api/session?path=${path}`)
+        .then((r) => r.json())
+        .then((data: UnifiedSession) => !cancelled && setSession(data));
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // Live tail: stream session updates as the file changes on disk.
+    const es = new EventSource(`/api/watch?path=${path}`);
+    es.onmessage = (e) => setSession(JSON.parse(e.data));
+    return () => es.close();
+  }, [selected, live]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -183,6 +197,14 @@ export function App() {
               <div className="head-row">
                 <SourceBadge source={selected.source} />
                 <span className="head-title">{selected.title}</span>
+                <button
+                  className={`live-toggle ${live ? "live-on" : ""}`}
+                  onClick={() => setLive((v) => !v)}
+                  title={live ? "Live tail on — click to pause" : "Live tail off"}
+                >
+                  <span className="live-dot" />
+                  {live ? "LIVE" : "PAUSED"}
+                </button>
               </div>
               <div className="muted small head-sub">
                 {selected.model} · {selected.cwd}

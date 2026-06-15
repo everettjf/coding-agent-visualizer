@@ -1,6 +1,7 @@
 // Bun-native fullstack server: serves the React app and the local-data API
 // from a single process. No external services; reads only ~/.claude and ~/.codex.
 
+import { watch } from "node:fs";
 import { getSession, listSessions } from "../lib/discovery";
 import index from "../frontend/index.html";
 
@@ -26,6 +27,66 @@ const server = Bun.serve({
         return Response.json({ error: "not found" }, { status: 404 });
       }
       return Response.json(session);
+    },
+
+    // Live tail: Server-Sent Events stream that re-parses & pushes the session
+    // whenever its file changes on disk.
+    "/api/watch": (req) => {
+      const url = new URL(req.url);
+      const filePath = url.searchParams.get("path");
+      if (!filePath) {
+        return Response.json({ error: "missing path" }, { status: 400 });
+      }
+
+      const stream = new ReadableStream({
+        start(controller) {
+          const enc = new TextEncoder();
+          let closed = false;
+          let timer: ReturnType<typeof setTimeout> | null = null;
+
+          const push = async () => {
+            if (closed) return;
+            const session = await getSession(filePath);
+            if (session && !closed) {
+              try {
+                controller.enqueue(
+                  enc.encode(`data: ${JSON.stringify(session)}\n\n`),
+                );
+              } catch {
+                /* stream already closed */
+              }
+            }
+          };
+
+          const cleanup = () => {
+            if (closed) return;
+            closed = true;
+            if (timer) clearTimeout(timer);
+            watcher.close();
+            try {
+              controller.close();
+            } catch {
+              /* already closed */
+            }
+          };
+
+          const watcher = watch(filePath, () => {
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(push, 250); // debounce rapid writes
+          });
+
+          void push(); // send current state immediately
+          req.signal.addEventListener("abort", cleanup);
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+        },
+      });
     },
   },
 

@@ -43,6 +43,7 @@ machine.
 | 🔍 **Graph search & filters** | Highlight matching nodes; toggle roles (hide reasoning/tools) to declutter. |
 | 🧩 **Diff & inspect** | Click any node for full message / reasoning / tool I/O, with colored diffs for `Edit`/`Write` and one-click copy. |
 | 🗂️ **Multi-source** | Claude Code and Codex today; pluggable adapters for **Gemini** and **OpenAI** next. |
+| 🔴 **Live tail** | Toggle **LIVE** to stream a session into the graph as the agent writes to disk — watch it think in real time. |
 
 ## 🚀 Quick start
 
@@ -115,7 +116,7 @@ SessionNode {
 
 ## 🗺️ Roadmap
 
-- [ ] Live tail — watch files and stream updates into the graph
+- [x] Live tail — watch files and stream updates into the graph
 - [ ] Gemini CLI and OpenAI adapters
 - [ ] Cross-session analytics (cost over time, tool trends)
 - [ ] Inline syntax-highlighted diffs
