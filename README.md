@@ -1,78 +1,142 @@
+<div align="center">
+
+![Coding Agent Visualizer](assets/banner.svg)
+
 # Coding Agent Visualizer
 
-Turns the **local session data** of coding agents into a beautiful, interactive
-graph. Today it reads **Claude Code** (`~/.claude/projects`) and **Codex**
-(`~/.codex/sessions`); the architecture is built to add **Gemini** and **OpenAI**
-by writing a single adapter each.
+**Turn the local session files of your coding agents into a beautiful, interactive map.**
 
-Not an office/animation gimmick — the focus is making an agent's real execution
-(messages, reasoning, tool calls, file edits, tokens) legible and explorable.
+[![Bun](https://img.shields.io/badge/runtime-Bun-fbf0df?logo=bun&logoColor=black)](https://bun.sh)
+[![React](https://img.shields.io/badge/UI-React%2019-61dafb?logo=react&logoColor=black)](https://react.dev)
+[![React Flow](https://img.shields.io/badge/graph-React%20Flow-ff0072)](https://reactflow.dev)
+[![License: MIT](https://img.shields.io/badge/license-MIT-22c55e.svg)](LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-a78bfa.svg)](CONTRIBUTING.md)
 
-## Stack
+[**Live demo / landing page →**](https://everettjf.github.io/coding-agent-visualizer/)
 
-Bun-native fullstack — a single `Bun.serve` process serves both the React UI
-and the local-data API. No external services; your transcripts never leave the
+</div>
+
+---
+
+Coding agents like **Claude Code** and **OpenAI Codex** quietly record every
+session to disk as JSONL — messages, reasoning, tool calls, file edits and token
+usage. That data is a goldmine, but it lives in raw log files no one reads.
+
+**Coding Agent Visualizer** reads those local files and renders them as an
+interactive **execution graph**, **timeline**, **file heatmap** and **analytics
+dashboard** — so you can actually *see* what your agent did, how it branched into
+sub-agents, which files it hammered, and where the tokens went.
+
+No office mascots, no 3D robots. Just a fast, good-looking, *useful* lens on
+real agent runs. Everything runs locally — your transcripts never leave your
 machine.
 
-- **Runtime / bundler / package manager:** Bun
-- **UI:** React 19 + [React Flow](https://reactflow.dev/) for the execution graph
-- **Data:** source adapters normalize raw JSONL into one `UnifiedSession` model
+## ✨ Features
 
-## Run
+| | |
+|---|---|
+| 🕸️ **Execution graph** | Conversation rebuilt as a DAG (via `parentUuid`). Tool calls become child nodes; Claude Code sub-agents (`Task`) render as dashed branches. Pan, zoom, click to inspect. |
+| ⏱️ **Timeline** | Every event placed on a time track with role colors and previews — see the rhythm and gaps of a session. |
+| 🔥 **File heatmap** | Which files the session touched and how often, colored cool→hot by edit frequency. |
+| 📊 **Stats dashboard** | Duration, message/tool counts, input/output/cache tokens, a cumulative-token sparkline and per-tool usage bars. |
+| 💬 **Transcript** | A clean, readable conversation view with collapsible tool blocks. |
+| 🔍 **Graph search & filters** | Highlight matching nodes; toggle roles (hide reasoning/tools) to declutter. |
+| 🧩 **Diff & inspect** | Click any node for full message / reasoning / tool I/O, with colored diffs for `Edit`/`Write` and one-click copy. |
+| 🗂️ **Multi-source** | Claude Code and Codex today; pluggable adapters for **Gemini** and **OpenAI** next. |
+
+## 🚀 Quick start
+
+Requires [Bun](https://bun.sh) (≥ 1.2).
 
 ```bash
+git clone https://github.com/everettjf/coding-agent-visualizer.git
+cd coding-agent-visualizer
 bun install
-bun dev            # http://localhost:3000  (--hot reload)
-# or: PORT=3700 bun start
+bun dev          # → http://localhost:3000
 ```
 
-## Architecture
+The app auto-discovers sessions from:
+
+- **Claude Code** — `~/.claude/projects/<encoded-cwd>/*.jsonl`
+- **Codex** — `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
+
+Pick a session from the sidebar and explore. Nothing is uploaded anywhere.
+
+## 🧱 Architecture
+
+A single **Bun fullstack server** (`Bun.serve`) serves both the React UI and a
+tiny local-data API — no separate backend, no database, no telemetry.
 
 ```
 src/
-  lib/
-    types.ts              # UnifiedSession / SessionNode — the shared model
-    adapters/
-      claudeCode.ts       # ~/.claude/projects/*.jsonl  (uuid/parentUuid tree)
-      codex.ts            # ~/.codex/sessions/**/rollout-*.jsonl
-    discovery.ts          # scan local dirs, dispatch to adapters
-  server/index.ts         # Bun.serve: serves UI + /api/sessions, /api/session
-  frontend/
-    App.tsx               # session list + selection
-    GraphView.tsx         # React Flow execution graph (indented-tree layout)
-    DetailPanel.tsx       # node inspector (message / reasoning / tool I/O)
+├─ lib/
+│  ├─ types.ts            # UnifiedSession / SessionNode — the shared model
+│  ├─ stats.ts            # computeStats(): tools, files, tokens, timeline
+│  ├─ discovery.ts        # scan ~/.claude & ~/.codex, dispatch to adapters
+│  └─ adapters/
+│     ├─ claudeCode.ts    # uuid/parentUuid tree → nodes; tool calls; tokens
+│     └─ codex.ts         # rollout response_items → nodes
+├─ server/index.ts        # Bun.serve: UI + /api/sessions, /api/session
+└─ frontend/
+   ├─ App.tsx             # sidebar, tabs, panel orchestration
+   ├─ GraphView.tsx       # React Flow execution graph
+   ├─ DetailPanel.tsx     # node inspector (message / reasoning / tool / diff)
+   ├─ charts.tsx          # dependency-free SVG charts
+   └─ views/              # Timeline / Files / Stats / Transcript
 ```
 
-Every visualization consumes the unified model, so a new agent source only
-needs a new adapter under `lib/adapters/`.
+### The unified model
 
-## Unified model
+Every adapter normalizes its raw format into one shape, so all views are
+source-agnostic and a new agent only needs a new adapter:
 
 ```ts
 UnifiedSession {
   id, source, cwd, gitBranch, startedAt, endedAt,
   messageCount, toolCallCount, totalTokens, model,
-  nodes: SessionNode[]      // DAG via parentId; tool calls are child nodes
+  nodes: SessionNode[]          // DAG via parentId; tool calls are children
 }
+
 SessionNode {
-  id, parentId, role: user|assistant|tool|reasoning|system,
-  timestamp, isSidechain,   // isSidechain = Claude Code sub-agent (Task) branch
+  id, parentId, role: user | assistant | tool | reasoning | system,
+  timestamp, isSidechain,       // isSidechain = Claude Code sub-agent branch
   text?, thinking?,
-  tool?: { name, input, result, isError, files[] },
+  tool?:   { name, input, result, isError, files[] },
   tokens?: { input, output, cacheRead, cacheCreation }
 }
 ```
 
-## Status
+## 🔌 Adding a new source
 
-**Stage 1 + first visualization** — data layer, both adapters, session list, and
-the interactive execution graph (pan/zoom, click a node to inspect, sub-agent
-and tool branches). Verified end-to-end against real Claude Code transcripts.
+1. Create `src/lib/adapters/<name>.ts` exporting a parser that returns a
+   `UnifiedSession` (see `claudeCode.ts` as the reference).
+2. Register its directory + dispatch in `src/lib/discovery.ts`.
+3. That's it — every view works automatically.
 
-### Roadmap
+## 🗺️ Roadmap
 
-- Timeline + token/duration swimlanes
-- File-edit heatmap (which files a session touched, and how often)
-- Inline diff rendering for edits
-- Live tail (watch files, stream updates into the graph)
-- Gemini CLI and OpenAI adapters
+- [ ] Live tail — watch files and stream updates into the graph
+- [ ] Gemini CLI and OpenAI adapters
+- [ ] Cross-session analytics (cost over time, tool trends)
+- [ ] Inline syntax-highlighted diffs
+- [ ] Export a session as Markdown / shareable HTML
+- [ ] Collapse/expand sub-agent subtrees in the graph
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to help build these.
+
+## 🛠️ Scripts
+
+| Command | Description |
+|---|---|
+| `bun dev` | Dev server with hot reload |
+| `bun start` | Production server |
+| `bun run typecheck` | TypeScript check (`tsc --noEmit`) |
+
+## 🔒 Privacy
+
+Everything is read from your local disk and rendered in your local browser.
+There is no backend service, no account, and no network egress.
+
+## 📄 License
+
+[MIT](LICENSE) © everettjf

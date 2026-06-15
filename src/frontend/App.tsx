@@ -52,6 +52,15 @@ export function App() {
 
   useEffect(loadSessions, []);
 
+  // Esc closes the node detail panel.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setActiveNode(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   useEffect(() => {
     if (!selected) return;
     setSession(null);

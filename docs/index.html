@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Coding Agent Visualizer — see what your agent did</title>
+<meta name="description" content="Turn Claude Code & Codex local session files into an interactive execution graph, timeline, file heatmap and analytics. Local, private, beautiful." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='44' fill='%234f9cf9'/></svg>" />
+<style>
+  :root{
+    --bg:#0a0c12; --panel:#12151f; --border:#222838; --text:#e9edf6; --muted:#8b93a7;
+    --blue:#4f9cf9; --green:#22c55e; --violet:#a78bfa; --amber:#f59e0b; --pink:#ec4899; --cyan:#06b6d4;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
+
+  /* animated aurora background */
+  .aurora{position:fixed;inset:0;z-index:-1;overflow:hidden;filter:blur(70px);opacity:.6}
+  .aurora span{position:absolute;border-radius:50%;mix-blend-mode:screen;animation:float 18s ease-in-out infinite}
+  .a1{width:520px;height:520px;background:var(--blue);top:-120px;left:-80px}
+  .a2{width:480px;height:480px;background:var(--violet);top:-60px;right:-100px;animation-delay:-4s}
+  .a3{width:420px;height:420px;background:var(--pink);top:380px;left:30%;animation-delay:-8s}
+  .a4{width:400px;height:400px;background:var(--cyan);top:680px;right:10%;animation-delay:-12s}
+  @keyframes float{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(40px,-30px) scale(1.1)}66%{transform:translate(-30px,40px) scale(.95)}}
+
+  /* nav */
+  nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(12px);background:rgba(10,12,18,.6);border-bottom:1px solid var(--border)}
+  nav .wrap{display:flex;align-items:center;gap:20px;height:64px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800}
+  .logo{width:26px;height:26px;border-radius:8px;background:conic-gradient(from 0deg,var(--blue),var(--violet),var(--pink),var(--amber),var(--green),var(--blue))}
+  nav .links{margin-left:auto;display:flex;gap:22px;align-items:center}
+  nav .links a{color:var(--muted);font-size:14px}
+  nav .links a:hover{color:var(--text)}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:10px;font-weight:600;font-size:14px;border:1px solid var(--border);transition:.2s}
+  .btn-primary{background:linear-gradient(135deg,var(--blue),var(--violet));border:none;color:#fff;box-shadow:0 6px 24px rgba(79,156,249,.35)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(124,77,255,.45)}
+  .btn-ghost:hover{border-color:var(--blue);color:var(--blue)}
+
+  /* hero */
+  header.hero{padding:90px 0 60px;text-align:center}
+  .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:var(--panel);font-size:13px;color:var(--muted);margin-bottom:28px}
+  .pill b{color:var(--green)}
+  h1{font-size:clamp(40px,7vw,76px);line-height:1.05;font-weight:850;letter-spacing:-1.5px}
+  .grad{background:linear-gradient(110deg,var(--blue),var(--violet) 40%,var(--pink) 70%,var(--amber));-webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p.sub{max-width:660px;margin:24px auto 0;color:var(--muted);font-size:19px}
+  .cta{display:flex;gap:14px;justify-content:center;margin-top:36px;flex-wrap:wrap}
+
+  /* faux graph demo */
+  .demo{margin:64px auto 0;max-width:920px;background:linear-gradient(180deg,var(--panel),#0d1018);border:1px solid var(--border);border-radius:18px;padding:18px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+  .demo .bar{display:flex;gap:7px;padding:4px 6px 14px}
+  .demo .bar i{width:12px;height:12px;border-radius:50%;display:block}
+  .demo svg{width:100%;height:340px;display:block}
+  .demo .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+  .demo .tab{font-size:12px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);color:var(--muted)}
+  .demo .tab.on{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--blue),var(--violet))}
+  .gnode rect{rx:10}
+  .pulse{animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+  .flow{stroke-dasharray:6 8;animation:dash 1.4s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-28}}
+
+  /* sections */
+  section{padding:80px 0}
+  .eyebrow{text-align:center;color:var(--blue);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;font-size:13px}
+  h2{text-align:center;font-size:clamp(28px,4vw,42px);font-weight:800;margin:10px 0 12px;letter-spacing:-.5px}
+  .lede{text-align:center;color:var(--muted);max-width:640px;margin:0 auto 50px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:24px;transition:.25s;position:relative;overflow:hidden}
+  .card:hover{transform:translateY(-4px);border-color:#33405a}
+  .card .ic{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16px}
+  .card h3{font-size:18px;margin-bottom:8px}
+  .card p{color:var(--muted);font-size:14.5px}
+  .card::after{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--c)}
+
+  /* steps */
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px;counter-reset:s}
+  .step{position:relative;padding-left:60px}
+  .step::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:-4px;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--blue),var(--violet))}
+  .step h3{margin-bottom:6px}
+  .step p{color:var(--muted);font-size:14.5px}
+
+  /* code */
+  .code{background:#0c0f17;border:1px solid var(--border);border-radius:14px;overflow:hidden;max-width:760px;margin:0 auto}
+  .code .top{display:flex;gap:7px;padding:12px 16px;border-bottom:1px solid var(--border)}
+  .code .top i{width:11px;height:11px;border-radius:50%}
+  pre{padding:20px;overflow:auto;font:13.5px/1.7 ui-monospace,Menlo,monospace}
+  .k{color:var(--violet)} .s{color:var(--green)} .c{color:var(--muted)} .t{color:var(--cyan)} .p{color:var(--amber)}
+
+  /* agents */
+  .agents{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+  .agent{display:flex;align-items:center;gap:10px;padding:12px 20px;border-radius:12px;border:1px solid var(--border);background:var(--panel);font-weight:600}
+  .agent small{color:var(--muted);font-weight:400}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .soon{opacity:.55}
+
+  /* cta band */
+  .band{background:linear-gradient(120deg,rgba(79,156,249,.14),rgba(167,139,250,.14),rgba(236,72,153,.14));border:1px solid var(--border);border-radius:24px;padding:56px 32px;text-align:center;margin:0 24px}
+
+  footer{border-top:1px solid var(--border);padding:40px 0;color:var(--muted);font-size:14px}
+  footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px}
+
+  .roadmap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  .ritem{display:flex;align-items:center;gap:14px;padding:14px 18px;background:var(--panel);border:1px solid var(--border);border-radius:12px}
+  .ritem .tick{width:22px;height:22px;border-radius:6px;border:2px solid var(--border);flex:none}
+  .ritem.done .tick{background:var(--green);border-color:var(--green)}
+</style>
+</head>
+<body>
+<div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span><span class="a4"></span></div>
+
+<nav><div class="wrap">
+  <a class="brand" href="#top"><span class="logo"></span> Agent Visualizer</a>
+  <div class="links">
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    <a href="#roadmap">Roadmap</a>
+    <a class="btn btn-ghost" href="https://github.com/everettjf/coding-agent-visualizer">★ GitHub</a>
+  </div>
+</div></nav>
+
+<a id="top"></a>
+<header class="hero"><div class="wrap">
+  <span class="pill">🟢 <b>Local &amp; private</b> · your transcripts never leave your machine</span>
+  <h1>See what your<br><span class="grad">coding agent</span> actually did</h1>
+  <p class="sub">Claude Code and Codex record every session to disk — messages, reasoning, tool calls, file edits, tokens. Coding Agent Visualizer turns those raw JSONL logs into an interactive <b>graph</b>, <b>timeline</b>, <b>file heatmap</b> and <b>analytics dashboard</b>.</p>
+  <div class="cta">
+    <a class="btn btn-primary" href="https://github.com/everettjf/coding-agent-visualizer">Get started — it's open source</a>
+    <a class="btn btn-ghost" href="#features">Explore features</a>
+  </div>
+
+  <!-- animated faux app -->
+  <div class="demo">
+    <div class="bar"><i style="background:#ff5f56"></i><i style="background:#ffbd2e"></i><i style="background:#27c93f"></i></div>
+    <div class="tabs"><span class="tab on">Graph</span><span class="tab">Timeline</span><span class="tab">Files</span><span class="tab">Stats</span><span class="tab">Transcript</span></div>
+    <svg viewBox="0 0 880 340">
+      <g stroke="#33405a" stroke-width="2" fill="none">
+        <path class="flow" d="M150 50 L150 120"/>
+        <path class="flow" d="M150 120 L150 195"/>
+        <path class="flow" d="M150 195 L330 195"/>
+        <path class="flow" d="M150 195 L150 270"/>
+        <path class="flow" d="M330 195 L330 265"/>
+        <path class="flow" d="M150 270 L520 270"/>
+        <path class="flow" d="M520 270 L520 195"/>
+        <path class="flow" d="M520 195 L700 195"/>
+      </g>
+      <!-- nodes -->
+      <g font-family="ui-sans-serif" font-size="13">
+        <g class="gnode"><rect x="80" y="28" width="140" height="44" rx="11" fill="#12151f" stroke="#4f9cf9" stroke-width="1.5"/><circle cx="98" cy="50" r="5" fill="#4f9cf9" class="pulse"/><text x="112" y="54" fill="#e9edf6">User prompt</text></g>
+        <g class="gnode"><rect x="80" y="98" width="140" height="44" rx="11" fill="#12151f" stroke="#22c55e" stroke-width="1.5"/><circle cx="98" cy="120" r="5" fill="#22c55e" class="pulse"/><text x="112" y="124" fill="#e9edf6">Assistant</text></g>
+        <g class="gnode"><rect x="80" y="173" width="140" height="44" rx="11" fill="#12151f" stroke="#a78bfa" stroke-width="1.5"/><circle cx="98" cy="195" r="5" fill="#a78bfa" class="pulse"/><text x="112" y="199" fill="#e9edf6">Reasoning</text></g>
+        <g class="gnode"><rect x="270" y="173" width="130" height="44" rx="11" fill="#12151f" stroke="#f59e0b" stroke-width="1.5"/><circle cx="288" cy="195" r="5" fill="#f59e0b" class="pulse"/><text x="302" y="199" fill="#e9edf6">Read</text></g>
+        <g class="gnode"><rect x="270" y="243" width="130" height="44" rx="11" fill="#12151f" stroke="#f59e0b" stroke-width="1.5"/><circle cx="288" cy="265" r="5" fill="#f59e0b" class="pulse"/><text x="302" y="269" fill="#e9edf6">Edit</text></g>
+        <g class="gnode"><rect x="80" y="248" width="140" height="44" rx="11" fill="#12151f" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="5 4"/><circle cx="98" cy="270" r="5" fill="#a78bfa" class="pulse"/><text x="112" y="274" fill="#e9edf6">Sub-agent</text></g>
+        <g class="gnode"><rect x="455" y="248" width="130" height="44" rx="11" fill="#12151f" stroke="#06b6d4" stroke-width="1.5"/><circle cx="473" cy="270" r="5" fill="#06b6d4" class="pulse"/><text x="487" y="274" fill="#e9edf6">Bash</text></g>
+        <g class="gnode"><rect x="455" y="173" width="130" height="44" rx="11" fill="#12151f" stroke="#22c55e" stroke-width="1.5"/><circle cx="473" cy="195" r="5" fill="#22c55e" class="pulse"/><text x="487" y="199" fill="#e9edf6">Assistant</text></g>
+        <g class="gnode"><rect x="640" y="173" width="150" height="44" rx="11" fill="#12151f" stroke="#ec4899" stroke-width="1.5"/><circle cx="658" cy="195" r="5" fill="#ec4899" class="pulse"/><text x="672" y="199" fill="#e9edf6">Write file</text></g>
+      </g>
+    </svg>
+  </div>
+</div></header>
+
+<section id="features"><div class="wrap">
+  <p class="eyebrow">Five linked views</p>
+  <h2>One session, every angle</h2>
+  <p class="lede">Pick a session and switch between views — all driven by one unified data model, so every agent source looks consistent.</p>
+  <div class="grid">
+    <div class="card" style="--c:var(--blue)"><div class="ic" style="background:rgba(79,156,249,.15)">🕸️</div><h3>Execution graph</h3><p>The conversation rebuilt as a DAG. Tool calls become child nodes; sub-agents branch off as dashed nodes. Pan, zoom, click to inspect.</p></div>
+    <div class="card" style="--c:var(--green)"><div class="ic" style="background:rgba(34,197,94,.15)">⏱️</div><h3>Timeline</h3><p>Every event on a time track with role colors — feel the rhythm, spot the long-running tools and the gaps.</p></div>
+    <div class="card" style="--c:var(--amber)"><div class="ic" style="background:rgba(245,158,11,.15)">🔥</div><h3>File heatmap</h3><p>Which files the session touched and how often, colored cool→hot by edit frequency.</p></div>
+    <div class="card" style="--c:var(--violet)"><div class="ic" style="background:rgba(167,139,250,.15)">📊</div><h3>Stats dashboard</h3><p>Duration, message and tool counts, input/output/cache tokens, a cumulative-token sparkline and per-tool usage bars.</p></div>
+    <div class="card" style="--c:var(--pink)"><div class="ic" style="background:rgba(236,72,153,.15)">💬</div><h3>Transcript</h3><p>A clean, readable conversation with collapsible tool blocks for when you just want to read.</p></div>
+    <div class="card" style="--c:var(--cyan)"><div class="ic" style="background:rgba(6,182,212,.15)">🔍</div><h3>Search &amp; filter</h3><p>Highlight matching nodes in the graph; toggle roles to hide reasoning or tools and declutter.</p></div>
+    <div class="card" style="--c:var(--green)"><div class="ic" style="background:rgba(34,197,94,.15)">🧩</div><h3>Diff &amp; inspect</h3><p>Click any node for full message / reasoning / tool I/O, with colored diffs for Edit &amp; Write and one-click copy.</p></div>
+    <div class="card" style="--c:var(--blue)"><div class="ic" style="background:rgba(79,156,249,.15)">🗂️</div><h3>Multi-source</h3><p>Claude Code and Codex today; pluggable adapters for Gemini and OpenAI next — a new agent is just one file.</p></div>
+  </div>
+</div></section>
+
+<section id="how" style="padding-top:20px"><div class="wrap">
+  <p class="eyebrow">How it works</p>
+  <h2>Local files in, insight out</h2>
+  <p class="lede">A single Bun fullstack server serves both the UI and a tiny local-data API. No backend, no database, no telemetry.</p>
+  <div class="steps">
+    <div class="step"><h3>Discover</h3><p>Scans <code>~/.claude/projects</code> and <code>~/.codex/sessions</code> for session JSONL files.</p></div>
+    <div class="step"><h3>Normalize</h3><p>Per-agent adapters map raw logs into one <code>UnifiedSession</code> model — nodes, tools, tokens, parent links.</p></div>
+    <div class="step"><h3>Visualize</h3><p>Every view renders from that single model, so all sources look consistent and feel fast.</p></div>
+  </div>
+
+  <div style="margin-top:50px" class="code">
+    <div class="top"><i style="background:#ff5f56"></i><i style="background:#ffbd2e"></i><i style="background:#27c93f"></i></div>
+<pre><span class="c">// one shape that every adapter normalizes into</span>
+<span class="k">interface</span> <span class="t">SessionNode</span> {
+  id<span class="p">:</span> <span class="t">string</span>; parentId<span class="p">:</span> <span class="t">string</span> | <span class="k">null</span>;   <span class="c">// DAG edges</span>
+  role<span class="p">:</span> <span class="s">"user"</span>|<span class="s">"assistant"</span>|<span class="s">"tool"</span>|<span class="s">"reasoning"</span>;
+  isSidechain<span class="p">?:</span> <span class="t">boolean</span>;                <span class="c">// sub-agent branch</span>
+  text<span class="p">?:</span> <span class="t">string</span>; thinking<span class="p">?:</span> <span class="t">string</span>;
+  tool<span class="p">?:</span> { name<span class="p">:</span> <span class="t">string</span>; input<span class="p">:</span> <span class="t">unknown</span>; files<span class="p">?:</span> <span class="t">string</span>[] };
+  tokens<span class="p">?:</span> { input<span class="p">:</span> <span class="t">number</span>; output<span class="p">:</span> <span class="t">number</span> };
+}</pre>
+  </div>
+</div></section>
+
+<section style="padding-top:20px"><div class="wrap">
+  <p class="eyebrow">Supported agents</p>
+  <h2>Built to grow</h2>
+  <div class="agents">
+    <div class="agent"><span class="dot" style="background:var(--green)"></span> Claude Code <small>· ready</small></div>
+    <div class="agent"><span class="dot" style="background:var(--blue)"></span> OpenAI Codex <small>· ready</small></div>
+    <div class="agent soon"><span class="dot" style="background:var(--amber)"></span> Gemini CLI <small>· planned</small></div>
+    <div class="agent soon"><span class="dot" style="background:var(--pink)"></span> OpenAI <small>· planned</small></div>
+  </div>
+</div></section>
+
+<section id="roadmap" style="padding-top:20px"><div class="wrap">
+  <p class="eyebrow">Roadmap</p>
+  <h2>What's next</h2>
+  <p class="lede"></p>
+  <div class="roadmap">
+    <div class="ritem done"><span class="tick"></span> Execution graph, timeline, file heatmap, stats &amp; transcript</div>
+    <div class="ritem done"><span class="tick"></span> Claude Code &amp; Codex adapters with a shared unified model</div>
+    <div class="ritem"><span class="tick"></span> Live tail — stream updates into the graph as the agent works</div>
+    <div class="ritem"><span class="tick"></span> Gemini CLI and OpenAI adapters</div>
+    <div class="ritem"><span class="tick"></span> Cross-session analytics — cost over time, tool trends</div>
+    <div class="ritem"><span class="tick"></span> Export a session as Markdown / shareable HTML</div>
+  </div>
+</div></section>
+
+<section style="padding-top:10px"><div class="band">
+  <h2 style="margin-bottom:14px">Make your agent runs legible</h2>
+  <p style="color:var(--muted);max-width:520px;margin:0 auto 28px">Clone it, run <code>bun dev</code>, and explore your own sessions in under a minute. MIT licensed.</p>
+  <a class="btn btn-primary" href="https://github.com/everettjf/coding-agent-visualizer">View on GitHub</a>
+</div></section>
+
+<footer><div class="wrap">
+  <div><span class="logo" style="display:inline-block;vertical-align:middle"></span> &nbsp;Coding Agent Visualizer — MIT © everettjf</div>
+  <div><a href="https://github.com/everettjf/coding-agent-visualizer">GitHub</a> · Built with Bun + React Flow</div>
+</div></footer>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d0f14"/>
+      <stop offset="100%" stop-color="#161a26"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4f9cf9"/>
+      <stop offset="35%" stop-color="#a78bfa"/>
+      <stop offset="70%" stop-color="#ec4899"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="360" fill="url(#bg)"/>
+
+  <!-- node graph motif -->
+  <g stroke="#2a3142" stroke-width="2" fill="none" opacity="0.9">
+    <path d="M780 90 L900 90"/>
+    <path d="M900 90 L900 170"/>
+    <path d="M900 170 L1020 170"/>
+    <path d="M900 170 L900 250"/>
+    <path d="M900 250 L1020 250"/>
+    <path d="M780 90 L780 250"/>
+    <path d="M780 250 L880 250"/>
+  </g>
+  <g filter="url(#glow)">
+    <circle cx="780" cy="90" r="13" fill="#4f9cf9"/>
+    <circle cx="900" cy="90" r="13" fill="#22c55e"/>
+    <circle cx="900" cy="170" r="13" fill="#a78bfa"/>
+    <circle cx="1020" cy="170" r="13" fill="#f59e0b"/>
+    <circle cx="900" cy="250" r="13" fill="#f59e0b"/>
+    <circle cx="1020" cy="250" r="13" fill="#ec4899"/>
+    <circle cx="780" cy="250" r="13" fill="#06b6d4"/>
+  </g>
+
+  <text x="80" y="150" font-size="62" font-weight="800" fill="url(#brand)">Coding Agent</text>
+  <text x="80" y="222" font-size="62" font-weight="800" fill="#e6e9f0">Visualizer</text>
+  <text x="82" y="270" font-size="22" fill="#8a92a6">Turn Claude Code &amp; Codex local sessions into an interactive graph</text>
+  <g transform="translate(82,300)" font-size="14" fill="#9cc6ff">
+    <rect x="0" y="0" width="118" height="26" rx="13" fill="rgba(79,156,249,0.15)"/>
+    <text x="59" y="17" text-anchor="middle">Bun fullstack</text>
+    <rect x="130" y="0" width="118" height="26" rx="13" fill="rgba(34,197,94,0.15)"/>
+    <text x="189" y="17" text-anchor="middle" fill="#4ade80">React Flow</text>
+    <rect x="260" y="0" width="138" height="26" rx="13" fill="rgba(167,139,250,0.15)"/>
+    <text x="329" y="17" text-anchor="middle" fill="#c4b5fd">Local &amp; private</text>
+  </g>
+</svg>
