@@ -56,18 +56,30 @@ machine.
 | ⏱️ **Timeline** | Every event placed on a time track with role colors and previews — see the rhythm and gaps of a session. |
 | 🗂️ **File heatmap** | Which files the session touched and how often, colored cool→hot by edit frequency. |
 | 📊 **Stats dashboard** | Duration, message/tool counts, input/output/cache tokens, a cumulative-token line, a token-breakdown doughnut and per-tool bars — all rendered with **Chart.js**. |
+| 💵 **Real dollar cost** | Token counts turned into **USD** under each model's published pricing (cache reads/writes priced separately) — per session on Stats, and aggregated total / per-model in analytics. |
 | 💬 **Transcript** | A clean, readable conversation view with collapsible tool blocks. |
+| 🔎 **Full-text search** | Search across **every** session body — messages, reasoning and tool I/O — with snippets, not just titles. |
+| ⚖️ **Compare sessions** | Diff two runs metric-by-metric — duration, tokens, cost and tool usage with signed deltas — to see what changed when you tweaked a prompt. |
+| 📂 **Open any file** | Drag-and-drop (or pick) a transcript from anywhere; the source is auto-detected and rendered through every view. |
 | 🔍 **Graph search & filters** | Highlight matching nodes; toggle roles (hide reasoning/tools), flip layout horizontal/vertical. |
 | 🧩 **Diff & inspect** | Click any node for full message / reasoning / tool I/O, with syntax-highlighted diffs for `Edit`/`Write` and one-click copy. |
-| 🗂️ **Multi-source** | **Claude Code**, **Codex**, **Gemini CLI**, **OpenCode** and **Cursor** today; a new agent is just one pluggable adapter away. |
+| 🗂️ **Multi-source** | **Claude Code**, **Codex**, **Gemini CLI**, **OpenCode**, **Cursor** and **Cline** today; a new agent is just one pluggable adapter away. |
 | 🔴 **Live tail** | Toggle **LIVE** to stream a session into the graph as the agent writes to disk — watch it think in real time. |
-| 📈 **Cross-session analytics** | Aggregate every local session: token cost over time, tool-usage trends, and per-source / per-model / per-project breakdowns. |
+| 📈 **Cross-session analytics** | Aggregate every local session: token & cost over time, tool-usage trends, and per-source / per-model / per-project breakdowns. |
 | 🧬 **Collapsible sub-agents** | Fold a whole sub-agent (sidechain) branch into its entry node — collapse one or all at once to focus the graph. |
 | 📤 **Export** | Save any session as **Markdown** or a self-contained, shareable **HTML** transcript — generated locally, nothing uploaded. |
 
 ## 🚀 Quick start
 
 Requires [Bun](https://bun.sh) (≥ 1.2).
+
+Run it with **no clone** — straight from the published package:
+
+```bash
+bunx coding-agent-visualizer    # → http://localhost:3000
+```
+
+Or from source for development:
 
 ```bash
 git clone https://github.com/everettjf/coding-agent-visualizer.git
@@ -83,8 +95,11 @@ The app auto-discovers sessions from:
 - **Gemini CLI** — `~/.gemini/tmp/<project-hash>/checkpoint-*.json`
 - **OpenCode** — `~/.local/share/opencode/storage/{session,message,part}/…`
 - **Cursor** — the IDE's `state.vscdb` SQLite (composer chats)
+- **Cline** — VS Code globalStorage `…/saoudrizwan.claude-dev/tasks/<id>/`
 
-Pick a session from the sidebar and explore. Nothing is uploaded anywhere.
+Pick a session from the sidebar and explore — or **drop any transcript file**
+onto the window to visualize one from outside those locations. Nothing is
+uploaded anywhere.
 
 ## 🧱 Architecture
 
@@ -96,26 +111,29 @@ src/
 ├─ lib/
 │  ├─ types.ts            # UnifiedSession / SessionNode — the shared model
 │  ├─ stats.ts            # computeStats() + buildTrace()/buildHierarchy() derivations
+│  ├─ pricing.ts          # model → published USD rates; token breakdown → cost
 │  ├─ analytics.ts        # cross-session aggregation (cost/time, tool & model trends)
-│  ├─ discovery.ts        # scan all sources (mtime-cached), dispatch to adapters
+│  ├─ discovery.ts        # scan all sources (mtime-cached), search, upload, dispatch
 │  └─ adapters/
 │     ├─ claudeCode.ts    # uuid/parentUuid tree → nodes; tool calls; tokens
 │     ├─ codex.ts         # rollout response_items → nodes
 │     ├─ gemini.ts        # Gemini Content[] (checkpoints) → nodes
 │     ├─ opencode.ts      # session/message/part JSON files → nodes
-│     └─ cursor.ts        # state.vscdb SQLite composer chats → nodes
-├─ server/index.ts        # Bun.serve: UI + /api/sessions, /api/session, /api/analytics
+│     ├─ cursor.ts        # state.vscdb SQLite composer chats → nodes
+│     └─ cline.ts         # Cline task JSON (Anthropic messages + UI events) → nodes
+├─ bin/                   # `bunx coding-agent-visualizer` launcher
+├─ server/index.ts        # Bun.serve: UI + /api/sessions, /api/session, /api/analytics, /api/search, /api/parse
 └─ frontend/
-   ├─ App.tsx             # sidebar, Radix tabs, export menu, panel orchestration
+   ├─ App.tsx             # sidebar, search, Radix tabs, export menu, panel orchestration
    ├─ GraphView.tsx       # React Flow + dagre graph, collapsible sub-agents
    ├─ DetailPanel.tsx     # node inspector (message / reasoning / tool / diff)
-   ├─ ui.tsx              # role/tool colors + lucide icon mapping
+   ├─ ui.tsx              # role/tool/source colors + lucide icon mapping
    ├─ lib/
    │  ├─ charts.ts        # Chart.js registration + dark-theme defaults
    │  ├─ highlight.tsx    # tiny dependency-free syntax highlighter for diffs
    │  ├─ export.ts        # session → Markdown / self-contained HTML
    │  └─ utils.ts         # cn() Tailwind class merge helper
-   └─ views/              # Waterfall / Flame / Timeline / Files / Stats / Transcript / Analytics
+   └─ views/              # Waterfall / Flame / Timeline / Files / Stats / Transcript / Analytics / Compare
 ```
 
 The UI is **Tailwind v4** (via `bun-plugin-tailwind`, wired in `bunfig.toml`) with
@@ -156,17 +174,20 @@ SessionNode {
 |---|---|
 | `bun dev` | Dev server with hot reload |
 | `bun start` | Production server |
-| `bun test` | Adapter unit tests (runs against `fixtures/`) |
+| `bun run build` | Bundle the frontend to `dist/` (also a CI build check) |
+| `bun test` | Adapter + library unit tests (runs against `fixtures/`) |
 | `bun run typecheck` | TypeScript check (`tsc --noEmit`) |
 | `bun scripts/shot.ts` | Headless smoke test — opens every tab, reports runtime errors |
 | `bun scripts/capture.ts` | Regenerate the README / landing-page screenshots |
 
-The Claude Code, Codex and Gemini adapters are covered by tests in
-`src/lib/adapters/adapters.test.ts`, validated against realistic sample logs in
-`fixtures/`. Cross-session aggregation (`src/lib/analytics.test.ts`), the diff
-syntax highlighter and the Markdown/HTML exporters are unit-tested too. The
-Claude Code adapter is additionally verified against real local sessions (graph
-integrity: single connected tree, tool results linked, files tracked).
+All six adapters are covered by tests validated against realistic sample logs in
+`fixtures/`: Claude Code / Codex / Gemini / Cline in `adapters.test.ts`, and the
+non-JSONL OpenCode (fixture storage tree) and Cursor (in-memory SQLite) adapters
+in `extra.test.ts`. Pricing/cost (`pricing.test.ts`), cross-session aggregation,
+full-text search + upload detection (`discovery.test.ts`), the diff syntax
+highlighter and the Markdown/HTML exporters are unit-tested too. The Claude Code
+adapter is additionally verified against real local sessions (graph integrity:
+single connected tree, tool results linked, files tracked).
 
 ## 🔒 Privacy
 
