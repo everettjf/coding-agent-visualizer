@@ -63,11 +63,12 @@ const server = Bun.serve({
             }
           };
 
+          let watcher: ReturnType<typeof watch> | null = null;
           const cleanup = () => {
             if (closed) return;
             closed = true;
             if (timer) clearTimeout(timer);
-            watcher.close();
+            watcher?.close();
             try {
               controller.close();
             } catch {
@@ -75,10 +76,18 @@ const server = Bun.serve({
             }
           };
 
-          const watcher = watch(filePath, () => {
-            if (timer) clearTimeout(timer);
-            timer = setTimeout(push, 250); // debounce rapid writes
-          });
+          // OpenCode/Cursor sessions use synthetic ids (not real files), so
+          // there's nothing to fs.watch — just send the current snapshot.
+          if (!filePath.includes(":") || /^[a-zA-Z]:[\\/]/.test(filePath)) {
+            try {
+              watcher = watch(filePath, () => {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(push, 250); // debounce rapid writes
+              });
+            } catch {
+              /* not a watchable path; snapshot only */
+            }
+          }
 
           void push(); // send current state immediately
           req.signal.addEventListener("abort", cleanup);

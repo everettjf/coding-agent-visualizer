@@ -184,10 +184,24 @@ export function App() {
   }, [filtered]);
 
   const sourceCounts = useMemo(() => {
-    const c: Record<Source, number> = { "claude-code": 0, codex: 0, gemini: 0 };
+    const c: Record<Source, number> = {
+      "claude-code": 0,
+      codex: 0,
+      gemini: 0,
+      opencode: 0,
+      cursor: 0,
+    };
     for (const s of sessions) c[s.source]++;
     return c;
   }, [sessions]);
+
+  const SOURCE_CHIPS: { source: Source; label: string }[] = [
+    { source: "claude-code", label: "Claude" },
+    { source: "codex", label: "Codex" },
+    { source: "gemini", label: "Gemini" },
+    { source: "opencode", label: "OpenCode" },
+    { source: "cursor", label: "Cursor" },
+  ];
 
   return (
     <div className="app">
@@ -203,19 +217,19 @@ export function App() {
             onChange={(e) => setQuery(e.target.value)}
           />
           <div className="filter-row">
-            {(["all", "claude-code", "codex", "gemini"] as const).map((f) => (
+            <button
+              className={`chip ${sourceFilter === "all" ? "chip-on" : ""}`}
+              onClick={() => setSourceFilter("all")}
+            >
+              All ({sessions.length})
+            </button>
+            {SOURCE_CHIPS.filter((c) => sourceCounts[c.source] > 0).map((c) => (
               <button
-                key={f}
-                className={`chip ${sourceFilter === f ? "chip-on" : ""}`}
-                onClick={() => setSourceFilter(f)}
+                key={c.source}
+                className={`chip ${sourceFilter === c.source ? "chip-on" : ""}`}
+                onClick={() => setSourceFilter(c.source)}
               >
-                {f === "all"
-                  ? `All (${sessions.length})`
-                  : f === "claude-code"
-                    ? `Claude (${sourceCounts["claude-code"]})`
-                    : f === "codex"
-                      ? `Codex (${sourceCounts.codex})`
-                      : `Gemini (${sourceCounts.gemini})`}
+                {c.label} ({sourceCounts[c.source]})
               </button>
             ))}
             <button className="chip refresh" onClick={loadSessions} title="Rescan">

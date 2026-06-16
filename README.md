@@ -59,7 +59,7 @@ machine.
 | 💬 **Transcript** | A clean, readable conversation view with collapsible tool blocks. |
 | 🔍 **Graph search & filters** | Highlight matching nodes; toggle roles (hide reasoning/tools), flip layout horizontal/vertical. |
 | 🧩 **Diff & inspect** | Click any node for full message / reasoning / tool I/O, with syntax-highlighted diffs for `Edit`/`Write` and one-click copy. |
-| 🗂️ **Multi-source** | **Claude Code**, **Codex** and **Gemini CLI** today; a new agent is just one pluggable adapter away. |
+| 🗂️ **Multi-source** | **Claude Code**, **Codex**, **Gemini CLI**, **OpenCode** and **Cursor** today; a new agent is just one pluggable adapter away. |
 | 🔴 **Live tail** | Toggle **LIVE** to stream a session into the graph as the agent writes to disk — watch it think in real time. |
 | 📈 **Cross-session analytics** | Aggregate every local session: token cost over time, tool-usage trends, and per-source / per-model / per-project breakdowns. |
 | 🧬 **Collapsible sub-agents** | Fold a whole sub-agent (sidechain) branch into its entry node — collapse one or all at once to focus the graph. |
@@ -81,6 +81,8 @@ The app auto-discovers sessions from:
 - **Claude Code** — `~/.claude/projects/<encoded-cwd>/*.jsonl`
 - **Codex** — `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
 - **Gemini CLI** — `~/.gemini/tmp/<project-hash>/checkpoint-*.json`
+- **OpenCode** — `~/.local/share/opencode/storage/{session,message,part}/…`
+- **Cursor** — the IDE's `state.vscdb` SQLite (composer chats)
 
 Pick a session from the sidebar and explore. Nothing is uploaded anywhere.
 
@@ -95,11 +97,13 @@ src/
 │  ├─ types.ts            # UnifiedSession / SessionNode — the shared model
 │  ├─ stats.ts            # computeStats() + buildTrace()/buildHierarchy() derivations
 │  ├─ analytics.ts        # cross-session aggregation (cost/time, tool & model trends)
-│  ├─ discovery.ts        # scan ~/.claude, ~/.codex & ~/.gemini (mtime-cached), dispatch
+│  ├─ discovery.ts        # scan all sources (mtime-cached), dispatch to adapters
 │  └─ adapters/
 │     ├─ claudeCode.ts    # uuid/parentUuid tree → nodes; tool calls; tokens
 │     ├─ codex.ts         # rollout response_items → nodes
-│     └─ gemini.ts        # Gemini Content[] (checkpoints) → nodes
+│     ├─ gemini.ts        # Gemini Content[] (checkpoints) → nodes
+│     ├─ opencode.ts      # session/message/part JSON files → nodes
+│     └─ cursor.ts        # state.vscdb SQLite composer chats → nodes
 ├─ server/index.ts        # Bun.serve: UI + /api/sessions, /api/session, /api/analytics
 └─ frontend/
    ├─ App.tsx             # sidebar, Radix tabs, export menu, panel orchestration
@@ -145,18 +149,6 @@ SessionNode {
    `UnifiedSession` (see `claudeCode.ts` as the reference).
 2. Register its directory + dispatch in `src/lib/discovery.ts`.
 3. That's it — every view works automatically.
-
-## 🗺️ Roadmap
-
-- [x] Live tail — watch files and stream updates into the graph
-- [x] Gemini CLI adapter (Claude Code, Codex/OpenAI and Gemini supported)
-- [x] Cross-session analytics (cost over time, tool trends)
-- [x] Inline syntax-highlighted diffs
-- [x] Export a session as Markdown / shareable HTML
-- [x] Collapse/expand sub-agent subtrees in the graph
-- [ ] More adapters (Aider, Cursor, …)
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) to help build these.
 
 ## 🛠️ Scripts
 

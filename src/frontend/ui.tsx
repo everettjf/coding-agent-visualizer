@@ -17,6 +17,8 @@ import {
   NotebookPen,
   GitBranch,
   Gem,
+  SquareTerminal,
+  MousePointerClick,
   type LucideIcon,
 } from "lucide-react";
 
@@ -86,6 +88,8 @@ const SOURCE_META: Record<Source, { icon: LucideIcon; label: string }> = {
   "claude-code": { icon: Sparkles, label: "Claude Code" },
   codex: { icon: GitBranch, label: "Codex" },
   gemini: { icon: Gem, label: "Gemini" },
+  opencode: { icon: SquareTerminal, label: "OpenCode" },
+  cursor: { icon: MousePointerClick, label: "Cursor" },
 };
 
 export function SourceBadge({ source }: { source: Source }) {

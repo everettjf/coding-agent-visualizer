@@ -6,8 +6,25 @@ import { join } from "node:path";
 import { parseClaudeCodeSession } from "./adapters/claudeCode";
 import { parseCodexSession } from "./adapters/codex";
 import { parseGeminiSession } from "./adapters/gemini";
+import { loadOpenCodeSessions, getOpenCodeSession } from "./adapters/opencode";
+import { loadCursorSessions, getCursorSession } from "./adapters/cursor";
 import { aggregate, sessionToRecord, type Analytics, type SessionRecord } from "./analytics";
 import type { Source, SessionSummary, UnifiedSession } from "./types";
+
+// Non-file sources don't live as one JSONL per session (OpenCode = many small
+// JSON files, Cursor = a SQLite DB), so each exposes a loader returning fully
+// assembled sessions. They share the same UnifiedSession shape as everything else.
+const EXTRA_SOURCES: (() => Promise<UnifiedSession[]>)[] = [
+  loadOpenCodeSessions,
+  loadCursorSessions,
+];
+
+async function loadExtraSessions(): Promise<UnifiedSession[]> {
+  const groups = await Promise.all(
+    EXTRA_SOURCES.map((load) => load().catch(() => [] as UnifiedSession[])),
+  );
+  return groups.flat();
+}
 
 const CLAUDE_DIR = join(homedir(), ".claude", "projects");
 const CODEX_DIR = join(homedir(), ".codex", "sessions");
@@ -61,6 +78,8 @@ function parse(
       return parseCodexSession(raw, filePath);
     case "gemini":
       return parseGeminiSession(raw, filePath);
+    default:
+      return null; // opencode / cursor are not file-based (handled separately)
   }
 }
 
@@ -148,6 +167,10 @@ export async function listSessions(): Promise<SessionSummary[]> {
   const summaries = results.filter(
     (s): s is SessionSummary => s != null,
   );
+  for (const s of await loadExtraSessions()) {
+    const { nodes, ...summary } = s;
+    summaries.push(summary);
+  }
   // Most recent first.
   summaries.sort((a, b) => (b.endedAt ?? "").localeCompare(a.endedAt ?? ""));
   return summaries;
@@ -189,12 +212,19 @@ export async function getAnalytics(): Promise<Analytics> {
     if (!seen.has(key)) analyticsCache.delete(key);
   }
 
-  return aggregate(records.filter((r): r is SessionRecord => r != null));
+  const all = records.filter((r): r is SessionRecord => r != null);
+  for (const s of await loadExtraSessions()) all.push(sessionToRecord(s));
+  return aggregate(all);
 }
 
 export async function getSession(
   filePath: string,
 ): Promise<UnifiedSession | null> {
+  if (filePath.startsWith("opencode:"))
+    return getOpenCodeSession(filePath.slice("opencode:".length));
+  if (filePath.startsWith("cursor:"))
+    return getCursorSession(filePath.slice("cursor:".length));
+
   const source: Source = filePath.includes(`${join(".codex", "sessions")}`)
     ? "codex"
     : filePath.includes(`${join(".gemini", "tmp")}`)

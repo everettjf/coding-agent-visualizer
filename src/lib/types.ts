@@ -2,7 +2,12 @@
 // Every adapter normalizes its raw local files into these shapes so that all
 // visualizations (graph, timeline, file heatmap, transcript) are source-agnostic.
 
-export type Source = "claude-code" | "codex" | "gemini";
+export type Source =
+  | "claude-code"
+  | "codex"
+  | "gemini"
+  | "opencode"
+  | "cursor";
 
 export type NodeRole =
   | "user"

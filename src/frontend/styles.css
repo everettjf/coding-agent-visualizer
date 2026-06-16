@@ -151,6 +151,14 @@ body {
   background: rgba(167, 139, 250, 0.15);
   color: #c4b5fd;
 }
+.badge-opencode {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+.badge-cursor {
+  background: rgba(236, 72, 153, 0.15);
+  color: #f9a8d4;
+}
 
 /* Main */
 .main {
