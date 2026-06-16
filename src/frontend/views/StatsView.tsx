@@ -3,6 +3,7 @@ import { Line, Bar, Doughnut } from "react-chartjs-2";
 import "../lib/charts";
 import type { UnifiedSession } from "../../lib/types";
 import { computeStats, fmtDuration, fmtTokens } from "../../lib/stats";
+import { fmtCost, modelPrice } from "../../lib/pricing";
 
 function StatCard({
   label,
@@ -96,6 +97,12 @@ export function StatsView({ session }: { session: UnifiedSession }) {
           value={stats.totals.tool}
           sub={`${stats.tools.length} distinct`}
           accent="#f59e0b"
+        />
+        <StatCard
+          label="Estimated cost"
+          value={modelPrice(session.model) ? fmtCost(stats.costUsd) : "—"}
+          sub={modelPrice(session.model) ? session.model : "unpriced model"}
+          accent="#22c55e"
         />
         <StatCard label="Files touched" value={stats.files.length} accent="#a78bfa" />
         <StatCard label="Input tokens" value={fmtTokens(stats.totals.inputTokens)} accent="#06b6d4" />

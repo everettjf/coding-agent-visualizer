@@ -2,6 +2,7 @@
 // every view (stats, timeline, file heatmap) shares one implementation.
 
 import type { SessionNode, UnifiedSession } from "./types";
+import { estimateCostUsd } from "./pricing";
 
 export interface ToolStat {
   name: string;
@@ -35,7 +36,11 @@ export interface SessionStats {
     inputTokens: number;
     outputTokens: number;
     cacheTokens: number;
+    cacheReadTokens: number;
+    cacheCreationTokens: number;
   };
+  /** Estimated USD cost of the session under its model's published pricing. */
+  costUsd: number;
   maxFileTouches: number;
 }
 
@@ -50,6 +55,8 @@ export function computeStats(session: UnifiedSession): SessionStats {
     inputTokens: 0,
     outputTokens: 0,
     cacheTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
   };
 
   const start = session.startedAt ? Date.parse(session.startedAt) : null;
@@ -64,6 +71,8 @@ export function computeStats(session: UnifiedSession): SessionStats {
       totals.inputTokens += node.tokens.input;
       totals.outputTokens += node.tokens.output;
       totals.cacheTokens += node.tokens.cacheRead + node.tokens.cacheCreation;
+      totals.cacheReadTokens += node.tokens.cacheRead;
+      totals.cacheCreationTokens += node.tokens.cacheCreation;
       cumulativeTokens += node.tokens.input + node.tokens.output;
     }
 
@@ -98,12 +107,23 @@ export function computeStats(session: UnifiedSession): SessionStats {
     .sort((a, b) => b.touches - a.touches);
   const maxFileTouches = files.reduce((m, f) => Math.max(m, f.touches), 0);
 
+  const costUsd = estimateCostUsd(
+    {
+      input: totals.inputTokens,
+      output: totals.outputTokens,
+      cacheRead: totals.cacheReadTokens,
+      cacheCreation: totals.cacheCreationTokens,
+    },
+    session.model,
+  );
+
   return {
     durationMs: start != null && end != null ? end - start : 0,
     tools,
     files,
     timeline,
     totals,
+    costUsd,
     maxFileTouches,
   };
 }

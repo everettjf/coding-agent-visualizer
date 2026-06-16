@@ -5,6 +5,7 @@
 
 import type { Source, UnifiedSession } from "./types";
 import { computeStats } from "./stats";
+import { estimateCostUsd } from "./pricing";
 
 /** A compact, cache-friendly per-session summary used only for aggregation. */
 export interface SessionRecord {
@@ -17,6 +18,8 @@ export interface SessionRecord {
   inputTokens: number;
   outputTokens: number;
   cacheTokens: number;
+  /** Estimated USD cost under the session model's published pricing. */
+  cost: number;
   toolCalls: number;
   tools: Record<string, number>;
 }
@@ -24,6 +27,7 @@ export interface SessionRecord {
 export interface CountTokens {
   sessions: number;
   tokens: number;
+  cost: number;
 }
 export interface DailyPoint extends CountTokens {
   date: string;
@@ -36,6 +40,7 @@ export interface Analytics {
   sessionCount: number;
   totalTokens: number;
   totalToolCalls: number;
+  totalCost: number;
   bySource: NamedCountTokens[];
   byModel: NamedCountTokens[];
   topProjects: NamedCountTokens[];
@@ -63,6 +68,7 @@ export function sessionToRecord(session: UnifiedSession): SessionRecord {
     inputTokens: stats.totals.inputTokens,
     outputTokens: stats.totals.outputTokens,
     cacheTokens: stats.totals.cacheTokens,
+    cost: stats.costUsd,
     toolCalls: stats.totals.tool,
     tools,
   };
@@ -74,7 +80,7 @@ function topNamed(
 ): NamedCountTokens[] {
   return [...map.entries()]
     .map(([name, v]) => ({ name, ...v }))
-    .sort((a, b) => b.tokens - a.tokens || b.sessions - a.sessions)
+    .sort((a, b) => b.cost - a.cost || b.tokens - a.tokens || b.sessions - a.sessions)
     .slice(0, limit);
 }
 
@@ -87,21 +93,29 @@ export function aggregate(records: SessionRecord[]): Analytics {
 
   let totalTokens = 0;
   let totalToolCalls = 0;
+  let totalCost = 0;
 
-  const bump = (m: Map<string, CountTokens>, key: string, tokens: number) => {
-    const e = m.get(key) ?? { sessions: 0, tokens: 0 };
+  const bump = (
+    m: Map<string, CountTokens>,
+    key: string,
+    tokens: number,
+    cost: number,
+  ) => {
+    const e = m.get(key) ?? { sessions: 0, tokens: 0, cost: 0 };
     e.sessions++;
     e.tokens += tokens;
+    e.cost += cost;
     m.set(key, e);
   };
 
   for (const r of records) {
     totalTokens += r.tokens;
     totalToolCalls += r.toolCalls;
-    bump(bySource, r.source, r.tokens);
-    bump(byModel, r.model, r.tokens);
-    bump(byProject, r.project, r.tokens);
-    if (r.date) bump(byDay, r.date, r.tokens);
+    totalCost += r.cost;
+    bump(bySource, r.source, r.tokens, r.cost);
+    bump(byModel, r.model, r.tokens, r.cost);
+    bump(byProject, r.project, r.tokens, r.cost);
+    if (r.date) bump(byDay, r.date, r.tokens, r.cost);
     for (const [name, count] of Object.entries(r.tools)) {
       toolCounts.set(name, (toolCounts.get(name) ?? 0) + count);
     }
@@ -120,6 +134,7 @@ export function aggregate(records: SessionRecord[]): Analytics {
     sessionCount: records.length,
     totalTokens,
     totalToolCalls,
+    totalCost,
     bySource: topNamed(bySource, 10),
     byModel: topNamed(byModel, 10),
     topProjects: topNamed(byProject, 12),
