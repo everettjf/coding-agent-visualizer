@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Download,
   TrendingUp,
+  GitCompareArrows,
   type LucideIcon,
 } from "lucide-react";
 import type { SessionSummary, SessionNode, UnifiedSession, Source } from "../lib/types";
@@ -26,6 +27,7 @@ import { TranscriptView } from "./views/TranscriptView";
 import { WaterfallView } from "./views/WaterfallView";
 import { FlameView } from "./views/FlameView";
 import { AnalyticsView } from "./views/AnalyticsView";
+import { CompareView } from "./views/CompareView";
 import { SourceBadge } from "./ui";
 
 type ViewKey =
@@ -115,6 +117,7 @@ export function App() {
   const [view, setView] = useState<ViewKey>("graph");
   const [live, setLive] = useState(true);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
   const [searchHits, setSearchHits] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
 
@@ -268,11 +271,25 @@ export function App() {
           </div>
           <button
             className={`analytics-btn ${showAnalytics ? "analytics-on" : ""}`}
-            onClick={() => setShowAnalytics(true)}
+            onClick={() => {
+              setShowAnalytics(true);
+              setShowCompare(false);
+            }}
             title="Cross-session analytics"
           >
             <TrendingUp size={14} />
             Cross-session analytics
+          </button>
+          <button
+            className={`analytics-btn ${showCompare ? "analytics-on" : ""}`}
+            onClick={() => {
+              setShowCompare(true);
+              setShowAnalytics(false);
+            }}
+            title="Compare two sessions"
+          >
+            <GitCompareArrows size={14} />
+            Compare sessions
           </button>
         </div>
         <div className="session-list">
@@ -310,6 +327,7 @@ export function App() {
                   onClick={() => {
                     setSelected(hit.summary);
                     setShowAnalytics(false);
+                    setShowCompare(false);
                   }}
                 >
                   <div className="session-item-top">
@@ -328,10 +346,11 @@ export function App() {
               {items.map((s) => (
                 <button
                   key={s.filePath}
-                  className={`session-item ${selected?.filePath === s.filePath && !showAnalytics ? "active" : ""}`}
+                  className={`session-item ${selected?.filePath === s.filePath && !showAnalytics && !showCompare ? "active" : ""}`}
                   onClick={() => {
                     setSelected(s);
                     setShowAnalytics(false);
+                    setShowCompare(false);
                   }}
                 >
                   <div className="session-item-top">
@@ -374,7 +393,29 @@ export function App() {
             </div>
           </>
         )}
-        {!showAnalytics && !selected && (
+        {showCompare && (
+          <>
+            <header className="main-head">
+              <div className="head-row">
+                <span className="head-title">Compare sessions</span>
+                <button
+                  className="live-toggle"
+                  onClick={() => setShowCompare(false)}
+                  title="Back to session view"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="muted small head-sub">
+                Diff two runs metric-by-metric — tokens, cost, duration and tool usage.
+              </div>
+            </header>
+            <div className="view-area">
+              <CompareView sessions={sessions} />
+            </div>
+          </>
+        )}
+        {!showAnalytics && !showCompare && !selected && (
           <div className="empty">
             <div className="empty-logo" />
             <h2>Coding Agent Visualizer</h2>
@@ -387,7 +428,7 @@ export function App() {
             <p className="muted small">Select a session on the left to begin.</p>
           </div>
         )}
-        {!showAnalytics && selected && (
+        {!showAnalytics && !showCompare && selected && (
           <>
             <header className="main-head">
               <div className="head-row">
