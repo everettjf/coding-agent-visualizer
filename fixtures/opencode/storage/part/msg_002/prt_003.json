@@ -1,0 +1,9 @@
+{
+  "type": "tool",
+  "tool": "edit",
+  "state": {
+    "status": "completed",
+    "input": { "filePath": "/home/user/demo-project/utils.ts" },
+    "output": "File updated successfully."
+  }
+}
