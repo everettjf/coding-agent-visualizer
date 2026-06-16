@@ -17,14 +17,21 @@
   a{color:inherit;text-decoration:none}
   .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
 
-  /* animated aurora background */
-  .aurora{position:fixed;inset:0;z-index:-1;overflow:hidden;filter:blur(70px);opacity:.6}
-  .aurora span{position:absolute;border-radius:50%;mix-blend-mode:screen;animation:float 18s ease-in-out infinite}
-  .a1{width:520px;height:520px;background:var(--blue);top:-120px;left:-80px}
-  .a2{width:480px;height:480px;background:var(--violet);top:-60px;right:-100px;animation-delay:-4s}
-  .a3{width:420px;height:420px;background:var(--pink);top:380px;left:30%;animation-delay:-8s}
-  .a4{width:400px;height:400px;background:var(--cyan);top:680px;right:10%;animation-delay:-12s}
-  @keyframes float{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(40px,-30px) scale(1.1)}66%{transform:translate(-30px,40px) scale(.95)}}
+  /* calm grid + contained glow background (static, high text contrast) */
+  body{
+    background:
+      radial-gradient(900px 480px at 50% -12%, rgba(79,156,249,.10), transparent 60%),
+      radial-gradient(760px 520px at 90% 6%, rgba(167,139,250,.07), transparent 58%),
+      var(--bg);
+    background-attachment:fixed;
+  }
+  .bg-grid{position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+    background-size:48px 48px;
+    -webkit-mask-image:radial-gradient(125% 75% at 50% 0%,#000 0%,transparent 72%);
+    mask-image:radial-gradient(125% 75% at 50% 0%,#000 0%,transparent 72%)}
 
   /* nav */
   nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(12px);background:rgba(10,12,18,.6);border-bottom:1px solid var(--border)}
@@ -148,7 +155,7 @@
 </style>
 </head>
 <body>
-<div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span><span class="a4"></span></div>
+<div class="bg-grid"></div>
 
 <nav><div class="wrap">
   <a class="brand" href="#top"><span class="logo"></span> Agent Visualizer</a>
