@@ -9,6 +9,9 @@ const SOURCE_COLOR: Record<string, string> = {
   "claude-code": "#22c55e",
   codex: "#4f9cf9",
   gemini: "#a78bfa",
+  opencode: "#f59e0b",
+  cursor: "#ec4899",
+  cline: "#14b8a6",
 };
 
 function Card({ label, value, accent }: { label: string; value: string | number; accent: string }) {

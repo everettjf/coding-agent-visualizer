@@ -19,6 +19,7 @@ import {
   Gem,
   SquareTerminal,
   MousePointerClick,
+  Bot as BotIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -90,6 +91,7 @@ const SOURCE_META: Record<Source, { icon: LucideIcon; label: string }> = {
   gemini: { icon: Gem, label: "Gemini" },
   opencode: { icon: SquareTerminal, label: "OpenCode" },
   cursor: { icon: MousePointerClick, label: "Cursor" },
+  cline: { icon: BotIcon, label: "Cline" },
 };
 
 export function SourceBadge({ source }: { source: Source }) {

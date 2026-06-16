@@ -166,6 +166,10 @@ body {
   background: rgba(236, 72, 153, 0.15);
   color: #f9a8d4;
 }
+.badge-cline {
+  background: rgba(20, 184, 166, 0.15);
+  color: #5eead4;
+}
 
 /* Main */
 .main {

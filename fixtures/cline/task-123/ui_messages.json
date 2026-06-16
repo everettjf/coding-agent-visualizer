@@ -1,0 +1,6 @@
+[
+  { "ts": 1750000000000, "type": "say", "say": "text", "text": "Add a hello function to utils.ts" },
+  { "ts": 1750000001000, "type": "say", "say": "api_req_started", "text": "{\"request\":\"...\",\"tokensIn\":320,\"tokensOut\":40,\"cacheWrites\":100,\"cacheReads\":50,\"cost\":0.012}" },
+  { "ts": 1750000005000, "type": "say", "say": "api_req_started", "text": "{\"request\":\"...\",\"tokensIn\":380,\"tokensOut\":90,\"cacheWrites\":0,\"cacheReads\":200}" },
+  { "ts": 1750000009000, "type": "say", "say": "api_req_started", "text": "{\"request\":\"...\",\"tokensIn\":410,\"tokensOut\":30}" }
+]

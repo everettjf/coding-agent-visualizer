@@ -1,0 +1,30 @@
+[
+  { "role": "user", "content": "<task>Add a hello function to utils.ts</task>" },
+  {
+    "role": "assistant",
+    "content": [{ "type": "thinking", "thinking": "I should read utils.ts before editing it." }]
+  },
+  {
+    "role": "assistant",
+    "content": [
+      { "type": "text", "text": "I'll read the file first." },
+      { "type": "tool_use", "id": "tool_1", "name": "read_file", "input": { "path": "/home/user/demo-project/utils.ts" } }
+    ]
+  },
+  {
+    "role": "user",
+    "content": [{ "type": "tool_result", "tool_use_id": "tool_1", "content": "export const x = 1;" }]
+  },
+  {
+    "role": "assistant",
+    "content": [
+      { "type": "text", "text": "Now I'll add the hello function." },
+      { "type": "tool_use", "id": "tool_2", "name": "replace_in_file", "input": { "path": "/home/user/demo-project/utils.ts" } }
+    ]
+  },
+  {
+    "role": "user",
+    "content": [{ "type": "tool_result", "tool_use_id": "tool_2", "content": "The content was successfully saved." }]
+  },
+  { "role": "assistant", "content": "Done — added the hello function to utils.ts." }
+]

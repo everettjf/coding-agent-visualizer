@@ -8,6 +8,7 @@ import { parseCodexSession } from "./adapters/codex";
 import { parseGeminiSession } from "./adapters/gemini";
 import { loadOpenCodeSessions, getOpenCodeSession } from "./adapters/opencode";
 import { loadCursorSessions, getCursorSession } from "./adapters/cursor";
+import { loadClineSessions, getClineSession } from "./adapters/cline";
 import { aggregate, sessionToRecord, type Analytics, type SessionRecord } from "./analytics";
 import type { Source, SessionSummary, UnifiedSession } from "./types";
 
@@ -47,6 +48,7 @@ function stringify(v: unknown): string {
 const EXTRA_SOURCES: (() => Promise<UnifiedSession[]>)[] = [
   loadOpenCodeSessions,
   loadCursorSessions,
+  loadClineSessions,
 ];
 
 async function loadExtraSessions(): Promise<UnifiedSession[]> {
@@ -379,6 +381,8 @@ export async function getSession(
     return getOpenCodeSession(filePath.slice("opencode:".length));
   if (filePath.startsWith("cursor:"))
     return getCursorSession(filePath.slice("cursor:".length));
+  if (filePath.startsWith("cline:"))
+    return getClineSession(filePath.slice("cline:".length));
 
   const source: Source = filePath.includes(`${join(".codex", "sessions")}`)
     ? "codex"
