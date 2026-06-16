@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { SessionSummary, SessionNode, UnifiedSession, Source } from "../lib/types";
+import type { SearchHit } from "../lib/discovery";
 import { fmtTokens } from "../lib/stats";
 import { toMarkdown, toHTML, download, slugify } from "./lib/export";
 import { GraphView } from "./GraphView";
@@ -114,6 +115,8 @@ export function App() {
   const [view, setView] = useState<ViewKey>("graph");
   const [live, setLive] = useState(true);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [searchHits, setSearchHits] = useState<SearchHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const loadSessions = () => {
     setLoading(true);
@@ -158,6 +161,33 @@ export function App() {
     es.onmessage = (e) => setSession(JSON.parse(e.data));
     return () => es.close();
   }, [selected, live]);
+
+  // Full-text content search: hits the server (which scans every session body)
+  // a beat after the user stops typing. Title/cwd matches stay instant + local.
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setSearchHits(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    let cancelled = false;
+    const t = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((hits: SearchHit[]) => {
+          if (cancelled) return;
+          setSearchHits(hits);
+          setSearching(false);
+        })
+        .catch(() => !cancelled && setSearching(false));
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [query]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -261,8 +291,36 @@ export function App() {
               ))}
             </div>
           )}
-          {!loading && !filtered.length && (
+          {!loading && !filtered.length && !searchHits?.length && (
             <div className="muted pad">No sessions found.</div>
+          )}
+          {query.trim().length >= 2 && (
+            <div className="session-group">
+              <div className="group-head">
+                Content matches
+                {searching ? " · …" : searchHits ? ` · ${searchHits.length}` : ""}
+              </div>
+              {searchHits && !searchHits.length && !searching && (
+                <div className="muted small pad">No matches in session bodies.</div>
+              )}
+              {searchHits?.map((hit) => (
+                <button
+                  key={`hit:${hit.summary.filePath}`}
+                  className={`session-item ${selected?.filePath === hit.summary.filePath && !showAnalytics ? "active" : ""}`}
+                  onClick={() => {
+                    setSelected(hit.summary);
+                    setShowAnalytics(false);
+                  }}
+                >
+                  <div className="session-item-top">
+                    <SourceBadge source={hit.summary.source} />
+                    <span className="muted small">{fmtTime(hit.summary.endedAt)}</span>
+                  </div>
+                  <div className="session-title">{hit.summary.title}</div>
+                  <div className="session-snippet muted small">{hit.snippet}</div>
+                </button>
+              ))}
+            </div>
           )}
           {groups.map(([proj, items]) => (
             <div key={proj} className="session-group">
