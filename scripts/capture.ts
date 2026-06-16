@@ -3,7 +3,7 @@ import puppeteer from "puppeteer-core";
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const OUT = "/Users/eevv/focus/coding-agent-visualizer/assets/screenshots";
-const VIEWS = ["Graph", "Waterfall", "Flame", "Stats"];
+const VIEWS = ["Graph", "Waterfall", "Flame", "Stats", "Timeline", "Transcript"];
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
