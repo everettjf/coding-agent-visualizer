@@ -1,4 +1,3 @@
-import type { ComponentType } from "react";
 import type { NodeRole, Source } from "../lib/types";
 import {
   User,
@@ -17,6 +16,7 @@ import {
   ListTodo,
   NotebookPen,
   GitBranch,
+  Gem,
   type LucideIcon,
 } from "lucide-react";
 
@@ -82,10 +82,14 @@ export function nodeIcon(role: NodeRole, toolName?: string): LucideIcon {
   return role === "tool" ? toolIcon(toolName) : roleIcon(role);
 }
 
+const SOURCE_META: Record<Source, { icon: LucideIcon; label: string }> = {
+  "claude-code": { icon: Sparkles, label: "Claude Code" },
+  codex: { icon: GitBranch, label: "Codex" },
+  gemini: { icon: Gem, label: "Gemini" },
+};
+
 export function SourceBadge({ source }: { source: Source }) {
-  const Icon: ComponentType<{ size?: number; className?: string }> =
-    source === "claude-code" ? Sparkles : GitBranch;
-  const label = source === "claude-code" ? "Claude Code" : "Codex";
+  const { icon: Icon, label } = SOURCE_META[source] ?? SOURCE_META["claude-code"];
   return (
     <span className={`badge badge-${source} inline-flex items-center gap-1`}>
       <Icon size={11} />

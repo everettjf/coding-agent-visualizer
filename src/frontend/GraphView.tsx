@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -12,6 +12,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import Dagre from "@dagrejs/dagre";
+import { ChevronRight, ChevronDown, Bot } from "lucide-react";
 import type { SessionNode, UnifiedSession, NodeRole } from "../lib/types";
 import { roleColor, roleLabel, nodeIcon } from "./ui";
 
@@ -26,6 +27,12 @@ interface GraphNodeData extends Record<string, unknown> {
   tools: SessionNode[];
   active: boolean;
   dimmed: boolean;
+  /** This node is the entry point of a sub-agent (sidechain) branch. */
+  isSubAgentRoot: boolean;
+  /** Number of descendants currently folded away under this root. */
+  hiddenCount: number;
+  collapsed: boolean;
+  onToggleCollapse: (id: string) => void;
   onPickTool: (n: SessionNode) => void;
 }
 
@@ -38,7 +45,10 @@ function estimateHeight(d: { tools: SessionNode[]; node: SessionNode }): number 
 }
 
 function AgentNode({ data }: NodeProps) {
-  const { node, tools, active, dimmed, onPickTool } = data as GraphNodeData;
+  const {
+    node, tools, active, dimmed,
+    isSubAgentRoot, hiddenCount, collapsed, onToggleCollapse, onPickTool,
+  } = data as GraphNodeData;
   const color = roleColor(node.role);
   const Icon = nodeIcon(node.role, node.tool?.name);
   const label = roleLabel(node.role);
@@ -46,6 +56,7 @@ function AgentNode({ data }: NodeProps) {
     .replace(/\s+/g, " ")
     .slice(0, 80);
   const tokens = node.tokens ? node.tokens.input + node.tokens.output : 0;
+  const canCollapse = isSubAgentRoot && (hiddenCount > 0 || collapsed);
 
   return (
     <div
@@ -61,6 +72,19 @@ function AgentNode({ data }: NodeProps) {
         <span className="font-semibold">{label}</span>
         {node.isSidechain && (
           <span className="rounded bg-white/5 px-1 text-[10px] text-muted">sub-agent</span>
+        )}
+        {canCollapse && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleCollapse(node.id);
+            }}
+            title={collapsed ? `Expand sub-agent (${hiddenCount} hidden)` : "Collapse sub-agent"}
+            className="inline-flex items-center gap-0.5 rounded border border-border px-1 text-[10px] text-muted hover:text-text hover:border-accent"
+          >
+            {collapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
+            {collapsed && <span className="tabular-nums">{hiddenCount}</span>}
+          </button>
         )}
         {tokens > 0 && (
           <span className="ml-auto text-[11px] text-muted tabular-nums">{tokens}</span>
@@ -234,12 +258,68 @@ export function GraphView({
   const [hidden, setHidden] = useState<Set<NodeRole>>(new Set());
   const [search, setSearch] = useState("");
   const [dir, setDir] = useState<Dir>("LR");
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const base = useMemo(() => layout(session, dir), [session, dir]);
+
+  // Forget collapse state when a different session loads (node ids change).
+  useEffect(() => setCollapsed(new Set()), [session]);
+
+  // Identify sub-agent (sidechain) branches and the anchors under each so we can
+  // fold a whole sub-agent subtree into its entry node. The graph is a forest —
+  // each anchor has at most one incoming edge — so a simple parent/child walk
+  // recovers the subtrees.
+  const subtrees = useMemo(() => {
+    const anchorById = new Map(base.graphNodes.map((a) => [a.node.id, a]));
+    const parentOf = new Map<string, string>();
+    const childrenOf = new Map<string, string[]>();
+    for (const e of base.edges) {
+      parentOf.set(e.target, e.source);
+      (childrenOf.get(e.source) ?? childrenOf.set(e.source, []).get(e.source)!).push(e.target);
+    }
+    const isSide = (id?: string | null) =>
+      !!(id && anchorById.get(id)?.node.isSidechain);
+
+    const roots = new Set<string>();
+    for (const a of base.graphNodes) {
+      if (a.node.isSidechain && !isSide(parentOf.get(a.node.id))) roots.add(a.node.id);
+    }
+    // Descendants of each root, following only into sidechain anchors so the
+    // main thread that resumes after the sub-agent stays visible.
+    const descendants = new Map<string, Set<string>>();
+    for (const root of roots) {
+      const set = new Set<string>();
+      const stack = [...(childrenOf.get(root) ?? [])];
+      while (stack.length) {
+        const id = stack.pop()!;
+        if (set.has(id) || !isSide(id)) continue;
+        set.add(id);
+        for (const c of childrenOf.get(id) ?? []) stack.push(c);
+      }
+      descendants.set(root, set);
+    }
+    return { roots, descendants };
+  }, [base]);
+
+  const collapsedHidden = useMemo(() => {
+    const h = new Set<string>();
+    for (const root of collapsed) {
+      const d = subtrees.descendants.get(root);
+      if (d) for (const id of d) h.add(id);
+    }
+    return h;
+  }, [collapsed, subtrees]);
+
+  const toggleCollapse = (id: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const nodes: Node[] = useMemo(() => {
     const q = search.trim();
     return base.graphNodes
-      .filter(({ node }) => !hidden.has(node.role))
+      .filter(({ node }) => !hidden.has(node.role) && !collapsedHidden.has(node.id))
       .map(({ node, tools }) => {
         const p = base.pos.get(node.id) ?? { x: 0, y: 0, h: NODE_BASE_H };
         return {
@@ -251,11 +331,15 @@ export function GraphView({
             tools: hidden.has("tool") ? [] : tools,
             active: node.id === activeId,
             dimmed: q.length > 0 && !matches(node, tools, q),
+            isSubAgentRoot: subtrees.roots.has(node.id),
+            hiddenCount: subtrees.descendants.get(node.id)?.size ?? 0,
+            collapsed: collapsed.has(node.id),
+            onToggleCollapse: toggleCollapse,
             onPickTool: onSelect,
           } satisfies GraphNodeData,
         };
       });
-  }, [base, hidden, activeId, search, onSelect]);
+  }, [base, hidden, activeId, search, onSelect, subtrees, collapsed, collapsedHidden]);
 
   const visibleIds = useMemo(() => new Set(nodes.map((n) => n.id)), [nodes]);
   const edges = useMemo(
@@ -302,6 +386,21 @@ export function GraphView({
         >
           {dir === "LR" ? "↔ Horizontal" : "↕ Vertical"}
         </button>
+        {subtrees.roots.size > 0 && (
+          <button
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-panel-2/90 px-2.5 py-1 text-xs backdrop-blur hover:border-accent"
+            onClick={() =>
+              setCollapsed((prev) =>
+                prev.size >= subtrees.roots.size ? new Set() : new Set(subtrees.roots),
+              )
+            }
+            title="Collapse or expand all sub-agent branches"
+          >
+            <Bot size={12} />
+            {collapsed.size >= subtrees.roots.size ? "Expand all" : "Collapse all"} (
+            {subtrees.roots.size})
+          </button>
+        )}
       </div>
       <ReactFlow
         nodes={nodes}

@@ -2,7 +2,7 @@
 // from a single process. No external services; reads only ~/.claude and ~/.codex.
 
 import { watch } from "node:fs";
-import { getSession, listSessions } from "../lib/discovery";
+import { getAnalytics, getSession, listSessions } from "../lib/discovery";
 import index from "../frontend/index.html";
 
 const server = Bun.serve({
@@ -14,6 +14,11 @@ const server = Bun.serve({
 
     "/api/sessions": async () => {
       return Response.json(await listSessions());
+    },
+
+    // Cross-session analytics aggregated across every discovered session.
+    "/api/analytics": async () => {
+      return Response.json(await getAnalytics());
     },
 
     "/api/session": async (req) => {

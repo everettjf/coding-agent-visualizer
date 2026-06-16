@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { SessionNode } from "../lib/types";
 import { roleColor, roleLabel } from "./ui";
+import { highlight, langForFile, type Lang } from "./lib/highlight";
 
 function pretty(value: unknown): string {
   if (value == null) return "";
@@ -28,8 +29,20 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-// Render an Edit/MultiEdit/Write tool input as a colored diff when possible.
-function DiffBlock({ input }: { input: any }) {
+// One diff line: a +/- gutter plus the line content, syntax-highlighted.
+function DiffLine({ sign, text, lang }: { sign: "+" | "-"; text: string; lang: Lang }) {
+  return (
+    <div className={sign === "+" ? "diff-add" : "diff-del"}>
+      <span className="diff-gutter">{sign}</span>
+      {highlight(text, lang)}
+    </div>
+  );
+}
+
+// Render an Edit/MultiEdit/Write tool input as a colored, syntax-highlighted
+// diff when possible. Language is inferred from the edited file's extension.
+function DiffBlock({ input, file }: { input: any; file?: string }) {
+  const lang = langForFile(file);
   const edits: { oldS: string; newS: string }[] = [];
   if (input?.old_string != null && input?.new_string != null) {
     edits.push({ oldS: String(input.old_string), newS: String(input.new_string) });
@@ -45,7 +58,7 @@ function DiffBlock({ input }: { input: any }) {
         {String(input.content)
           .split("\n")
           .map((l, i) => (
-            <div key={i} className="diff-add">+ {l}</div>
+            <DiffLine key={i} sign="+" text={l} lang={lang} />
           ))}
       </pre>
     );
@@ -56,10 +69,10 @@ function DiffBlock({ input }: { input: any }) {
       {edits.map((e, idx) => (
         <div key={idx}>
           {e.oldS.split("\n").map((l, i) => (
-            <div key={`o${i}`} className="diff-del">- {l}</div>
+            <DiffLine key={`o${i}`} sign="-" text={l} lang={lang} />
           ))}
           {e.newS.split("\n").map((l, i) => (
-            <div key={`n${i}`} className="diff-add">+ {l}</div>
+            <DiffLine key={`n${i}`} sign="+" text={l} lang={lang} />
           ))}
           {idx < edits.length - 1 && <div className="diff-sep" />}
         </div>
@@ -136,7 +149,9 @@ export function DetailPanel({
               </div>
             ) : null}
 
-            {isFileEdit && <DiffBlock input={node.tool.input} />}
+            {isFileEdit && (
+              <DiffBlock input={node.tool.input} file={node.tool.files?.[0]} />
+            )}
 
             <section>
               <div className="sec-head">

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseClaudeCodeSession } from "./claudeCode";
 import { parseCodexSession } from "./codex";
+import { parseGeminiSession } from "./gemini";
 import { computeStats } from "../stats";
 
 const fixtures = join(import.meta.dir, "../../../fixtures");
@@ -83,5 +84,57 @@ describe("Codex adapter", () => {
 
   test("reads token totals from token_count event", () => {
     expect(session.totalTokens).toBe(1540);
+  });
+});
+
+describe("Gemini adapter", () => {
+  const session = parseGeminiSession(read("gemini-sample.json"), "g.json")!;
+
+  test("parses session metadata from the envelope", () => {
+    expect(session.source).toBe("gemini");
+    expect(session.cwd).toBe("/home/user/demo-project");
+    expect(session.model).toBe("gemini-2.5-pro");
+    expect(session.title).toBe("Add a hello function to utils.ts");
+  });
+
+  test("maps user/model/reasoning roles and tool calls", () => {
+    const roles = session.nodes.map((n) => n.role);
+    expect(roles).toContain("user");
+    expect(roles).toContain("assistant");
+    expect(roles).toContain("reasoning"); // model turn with only a thought part
+    expect(roles).toContain("tool");
+    // every non-root node points at a real parent
+    const ids = new Set(session.nodes.map((n) => n.id));
+    for (const n of session.nodes) {
+      if (n.parentId) expect(ids.has(n.parentId)).toBe(true);
+    }
+  });
+
+  test("pairs functionResponse to its functionCall by name", () => {
+    const readTool = session.nodes.find((n) => n.tool?.name === "read_file");
+    expect(readTool!.tool!.result).toContain("export const x = 1;");
+    const replaceTool = session.nodes.find((n) => n.tool?.name === "replace");
+    expect(replaceTool!.tool!.result).toContain("File updated successfully.");
+  });
+
+  test("extracts edited file paths from tool args", () => {
+    const replaceTool = session.nodes.find((n) => n.tool?.name === "replace");
+    expect(replaceTool!.tool!.files).toEqual(["/home/user/demo-project/utils.ts"]);
+  });
+
+  test("sums token usage from usageMetadata", () => {
+    expect(session.totalTokens).toBe(320 + 40 + 380 + 90 + 410 + 30);
+    const stats = computeStats(session);
+    expect(stats.totals.cacheTokens).toBe(512);
+  });
+
+  test("accepts a bare Content[] array too", () => {
+    const bare = JSON.stringify([
+      { role: "user", parts: [{ text: "hi there" }] },
+      { role: "model", parts: [{ text: "hello!" }] },
+    ]);
+    const s = parseGeminiSession(bare, "bare.json")!;
+    expect(s.title).toBe("hi there");
+    expect(s.nodes.map((n) => n.role)).toEqual(["user", "assistant"]);
   });
 });

@@ -58,9 +58,12 @@ machine.
 | 📊 **Stats dashboard** | Duration, message/tool counts, input/output/cache tokens, a cumulative-token line, a token-breakdown doughnut and per-tool bars — all rendered with **Chart.js**. |
 | 💬 **Transcript** | A clean, readable conversation view with collapsible tool blocks. |
 | 🔍 **Graph search & filters** | Highlight matching nodes; toggle roles (hide reasoning/tools), flip layout horizontal/vertical. |
-| 🧩 **Diff & inspect** | Click any node for full message / reasoning / tool I/O, with colored diffs for `Edit`/`Write` and one-click copy. |
-| 🗂️ **Multi-source** | Claude Code and Codex today; pluggable adapters for **Gemini** and **OpenAI** next. |
+| 🧩 **Diff & inspect** | Click any node for full message / reasoning / tool I/O, with syntax-highlighted diffs for `Edit`/`Write` and one-click copy. |
+| 🗂️ **Multi-source** | **Claude Code**, **Codex** and **Gemini CLI** today; a new agent is just one pluggable adapter away. |
 | 🔴 **Live tail** | Toggle **LIVE** to stream a session into the graph as the agent writes to disk — watch it think in real time. |
+| 📈 **Cross-session analytics** | Aggregate every local session: token cost over time, tool-usage trends, and per-source / per-model / per-project breakdowns. |
+| 🧬 **Collapsible sub-agents** | Fold a whole sub-agent (sidechain) branch into its entry node — collapse one or all at once to focus the graph. |
+| 📤 **Export** | Save any session as **Markdown** or a self-contained, shareable **HTML** transcript — generated locally, nothing uploaded. |
 
 ## 🚀 Quick start
 
@@ -77,6 +80,7 @@ The app auto-discovers sessions from:
 
 - **Claude Code** — `~/.claude/projects/<encoded-cwd>/*.jsonl`
 - **Codex** — `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
+- **Gemini CLI** — `~/.gemini/tmp/<project-hash>/checkpoint-*.json`
 
 Pick a session from the sidebar and explore. Nothing is uploaded anywhere.
 
@@ -90,20 +94,24 @@ src/
 ├─ lib/
 │  ├─ types.ts            # UnifiedSession / SessionNode — the shared model
 │  ├─ stats.ts            # computeStats() + buildTrace()/buildHierarchy() derivations
-│  ├─ discovery.ts        # scan ~/.claude & ~/.codex (mtime-cached), dispatch to adapters
+│  ├─ analytics.ts        # cross-session aggregation (cost/time, tool & model trends)
+│  ├─ discovery.ts        # scan ~/.claude, ~/.codex & ~/.gemini (mtime-cached), dispatch
 │  └─ adapters/
 │     ├─ claudeCode.ts    # uuid/parentUuid tree → nodes; tool calls; tokens
-│     └─ codex.ts         # rollout response_items → nodes
-├─ server/index.ts        # Bun.serve: UI + /api/sessions, /api/session
+│     ├─ codex.ts         # rollout response_items → nodes
+│     └─ gemini.ts        # Gemini Content[] (checkpoints) → nodes
+├─ server/index.ts        # Bun.serve: UI + /api/sessions, /api/session, /api/analytics
 └─ frontend/
-   ├─ App.tsx             # sidebar, Radix tabs, panel orchestration
-   ├─ GraphView.tsx       # React Flow + dagre execution graph
+   ├─ App.tsx             # sidebar, Radix tabs, export menu, panel orchestration
+   ├─ GraphView.tsx       # React Flow + dagre graph, collapsible sub-agents
    ├─ DetailPanel.tsx     # node inspector (message / reasoning / tool / diff)
    ├─ ui.tsx              # role/tool colors + lucide icon mapping
    ├─ lib/
    │  ├─ charts.ts        # Chart.js registration + dark-theme defaults
+   │  ├─ highlight.tsx    # tiny dependency-free syntax highlighter for diffs
+   │  ├─ export.ts        # session → Markdown / self-contained HTML
    │  └─ utils.ts         # cn() Tailwind class merge helper
-   └─ views/              # Waterfall / Flame / Timeline / Files / Stats / Transcript
+   └─ views/              # Waterfall / Flame / Timeline / Files / Stats / Transcript / Analytics
 ```
 
 The UI is **Tailwind v4** (via `bun-plugin-tailwind`, wired in `bunfig.toml`) with
@@ -141,11 +149,12 @@ SessionNode {
 ## 🗺️ Roadmap
 
 - [x] Live tail — watch files and stream updates into the graph
-- [ ] Gemini CLI and OpenAI adapters
-- [ ] Cross-session analytics (cost over time, tool trends)
-- [ ] Inline syntax-highlighted diffs
-- [ ] Export a session as Markdown / shareable HTML
-- [ ] Collapse/expand sub-agent subtrees in the graph
+- [x] Gemini CLI adapter (Claude Code, Codex/OpenAI and Gemini supported)
+- [x] Cross-session analytics (cost over time, tool trends)
+- [x] Inline syntax-highlighted diffs
+- [x] Export a session as Markdown / shareable HTML
+- [x] Collapse/expand sub-agent subtrees in the graph
+- [ ] More adapters (Aider, Cursor, …)
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) to help build these.
 
@@ -160,11 +169,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to help build these.
 | `bun scripts/shot.ts` | Headless smoke test — opens every tab, reports runtime errors |
 | `bun scripts/capture.ts` | Regenerate the README / landing-page screenshots |
 
-Both the Claude Code and Codex adapters are covered by tests in
+The Claude Code, Codex and Gemini adapters are covered by tests in
 `src/lib/adapters/adapters.test.ts`, validated against realistic sample logs in
-`fixtures/`. The Claude Code adapter is additionally verified against real local
-sessions (graph integrity: single connected tree, tool results linked, files
-tracked).
+`fixtures/`. Cross-session aggregation (`src/lib/analytics.test.ts`), the diff
+syntax highlighter and the Markdown/HTML exporters are unit-tested too. The
+Claude Code adapter is additionally verified against real local sessions (graph
+integrity: single connected tree, tool results linked, files tracked).
 
 ## 🔒 Privacy
 

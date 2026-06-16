@@ -9,10 +9,13 @@ import {
   BarChart3,
   MessageSquare,
   RefreshCw,
+  Download,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import type { SessionSummary, SessionNode, UnifiedSession, Source } from "../lib/types";
 import { fmtTokens } from "../lib/stats";
+import { toMarkdown, toHTML, download, slugify } from "./lib/export";
 import { GraphView } from "./GraphView";
 import { DetailPanel } from "./DetailPanel";
 import { StatsView } from "./views/StatsView";
@@ -21,6 +24,7 @@ import { FilesView } from "./views/FilesView";
 import { TranscriptView } from "./views/TranscriptView";
 import { WaterfallView } from "./views/WaterfallView";
 import { FlameView } from "./views/FlameView";
+import { AnalyticsView } from "./views/AnalyticsView";
 import { SourceBadge } from "./ui";
 
 type ViewKey =
@@ -40,6 +44,53 @@ const VIEWS: { key: ViewKey; label: string; icon: LucideIcon }[] = [
   { key: "stats", label: "Stats", icon: BarChart3 },
   { key: "transcript", label: "Transcript", icon: MessageSquare },
 ];
+
+// Export the loaded session to Markdown or a self-contained HTML file.
+function ExportMenu({ session }: { session: UnifiedSession }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [open]);
+
+  const doExport = (kind: "md" | "html") => {
+    const base = slugify(session.title);
+    if (kind === "md") download(`${base}.md`, toMarkdown(session), "text/markdown");
+    else download(`${base}.html`, toHTML(session), "text/html");
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative ml-2" onClick={(e) => e.stopPropagation()}>
+      <button
+        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-panel-2 px-3 py-1 text-[11px] font-semibold text-muted hover:border-accent hover:text-text"
+        onClick={() => setOpen((o) => !o)}
+        title="Export this session"
+      >
+        <Download size={13} />
+        Export
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-lg border border-border bg-panel-2 text-sm shadow-xl">
+          <button
+            className="block w-full px-3 py-2 text-left hover:bg-white/5"
+            onClick={() => doExport("md")}
+          >
+            Markdown <span className="text-muted">(.md)</span>
+          </button>
+          <button
+            className="block w-full border-t border-border px-3 py-2 text-left hover:bg-white/5"
+            onClick={() => doExport("html")}
+          >
+            Shareable HTML <span className="text-muted">(.html)</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function fmtTime(ts: string | null): string {
   if (!ts) return "";
@@ -62,6 +113,7 @@ export function App() {
   const [sourceFilter, setSourceFilter] = useState<Source | "all">("all");
   const [view, setView] = useState<ViewKey>("graph");
   const [live, setLive] = useState(true);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   const loadSessions = () => {
     setLoading(true);
@@ -132,10 +184,9 @@ export function App() {
   }, [filtered]);
 
   const sourceCounts = useMemo(() => {
-    let cc = 0,
-      cx = 0;
-    for (const s of sessions) s.source === "claude-code" ? cc++ : cx++;
-    return { cc, cx };
+    const c: Record<Source, number> = { "claude-code": 0, codex: 0, gemini: 0 };
+    for (const s of sessions) c[s.source]++;
+    return c;
   }, [sessions]);
 
   return (
@@ -152,7 +203,7 @@ export function App() {
             onChange={(e) => setQuery(e.target.value)}
           />
           <div className="filter-row">
-            {(["all", "claude-code", "codex"] as const).map((f) => (
+            {(["all", "claude-code", "codex", "gemini"] as const).map((f) => (
               <button
                 key={f}
                 className={`chip ${sourceFilter === f ? "chip-on" : ""}`}
@@ -161,14 +212,24 @@ export function App() {
                 {f === "all"
                   ? `All (${sessions.length})`
                   : f === "claude-code"
-                    ? `Claude (${sourceCounts.cc})`
-                    : `Codex (${sourceCounts.cx})`}
+                    ? `Claude (${sourceCounts["claude-code"]})`
+                    : f === "codex"
+                      ? `Codex (${sourceCounts.codex})`
+                      : `Gemini (${sourceCounts.gemini})`}
               </button>
             ))}
             <button className="chip refresh" onClick={loadSessions} title="Rescan">
               ⟳
             </button>
           </div>
+          <button
+            className={`analytics-btn ${showAnalytics ? "analytics-on" : ""}`}
+            onClick={() => setShowAnalytics(true)}
+            title="Cross-session analytics"
+          >
+            <TrendingUp size={14} />
+            Cross-session analytics
+          </button>
         </div>
         <div className="session-list">
           {loading && (
@@ -195,8 +256,11 @@ export function App() {
               {items.map((s) => (
                 <button
                   key={s.filePath}
-                  className={`session-item ${selected?.filePath === s.filePath ? "active" : ""}`}
-                  onClick={() => setSelected(s)}
+                  className={`session-item ${selected?.filePath === s.filePath && !showAnalytics ? "active" : ""}`}
+                  onClick={() => {
+                    setSelected(s);
+                    setShowAnalytics(false);
+                  }}
                 >
                   <div className="session-item-top">
                     <SourceBadge source={s.source} />
@@ -216,19 +280,42 @@ export function App() {
       </aside>
 
       <main className="main">
-        {!selected && (
+        {showAnalytics && (
+          <>
+            <header className="main-head">
+              <div className="head-row">
+                <span className="head-title">Cross-session analytics</span>
+                <button
+                  className="live-toggle"
+                  onClick={() => setShowAnalytics(false)}
+                  title="Back to session view"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="muted small head-sub">
+                Aggregated across all discovered sessions — nothing leaves your machine.
+              </div>
+            </header>
+            <div className="view-area">
+              <AnalyticsView />
+            </div>
+          </>
+        )}
+        {!showAnalytics && !selected && (
           <div className="empty">
             <div className="empty-logo" />
             <h2>Coding Agent Visualizer</h2>
             <p className="muted">
-              Reads Claude Code (<code>~/.claude/projects</code>) and Codex
-              (<code>~/.codex/sessions</code>) transcripts and turns them into an
+              Reads Claude Code (<code>~/.claude/projects</code>), Codex
+              (<code>~/.codex/sessions</code>) and Gemini
+              (<code>~/.gemini/tmp</code>) transcripts and turns them into an
               interactive execution graph, timeline, file heatmap and analytics.
             </p>
             <p className="muted small">Select a session on the left to begin.</p>
           </div>
         )}
-        {selected && (
+        {!showAnalytics && selected && (
           <>
             <header className="main-head">
               <div className="head-row">
@@ -242,6 +329,7 @@ export function App() {
                   <span className="live-dot" />
                   {live ? "LIVE" : "PAUSED"}
                 </button>
+                {session && <ExportMenu session={session} />}
               </div>
               <div className="muted small head-sub">
                 {selected.model} · {selected.cwd}

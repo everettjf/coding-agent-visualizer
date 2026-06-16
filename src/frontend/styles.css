@@ -147,6 +147,10 @@ body {
   background: rgba(79, 156, 249, 0.15);
   color: #7db4ff;
 }
+.badge-gemini {
+  background: rgba(167, 139, 250, 0.15);
+  color: #c4b5fd;
+}
 
 /* Main */
 .main {
@@ -300,6 +304,33 @@ body {
   margin-left: auto;
   font-size: 14px;
   line-height: 1;
+}
+
+/* ===== Cross-session analytics button ===== */
+.analytics-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.analytics-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.analytics-on {
+  background: rgba(79, 156, 249, 0.18);
+  color: #9cc6ff;
+  border-color: rgba(79, 156, 249, 0.4);
 }
 
 /* ===== Session groups ===== */
@@ -562,6 +593,38 @@ body {
 }
 .diff-sep {
   height: 8px;
+}
+.diff-gutter {
+  display: inline-block;
+  width: 1.1em;
+  color: var(--muted);
+  user-select: none;
+}
+
+/* ===== Syntax highlighting tokens ===== */
+.tok-str {
+  color: #a5d6a7;
+}
+.tok-com {
+  color: #6b7280;
+  font-style: italic;
+}
+.tok-num {
+  color: #f0b27a;
+}
+.tok-kw {
+  color: #c792ea;
+}
+.tok-lit {
+  color: #4f9cf9;
+}
+.tok-fn {
+  color: #82aaff;
+}
+/* Keep diff add/del tinting on the line while tokens carry their own color. */
+.diff-add .tok-com,
+.diff-del .tok-com {
+  opacity: 0.85;
 }
 
 /* ===== Empty state ===== */

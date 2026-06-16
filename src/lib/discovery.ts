@@ -5,10 +5,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseClaudeCodeSession } from "./adapters/claudeCode";
 import { parseCodexSession } from "./adapters/codex";
+import { parseGeminiSession } from "./adapters/gemini";
+import { aggregate, sessionToRecord, type Analytics, type SessionRecord } from "./analytics";
 import type { Source, SessionSummary, UnifiedSession } from "./types";
 
 const CLAUDE_DIR = join(homedir(), ".claude", "projects");
 const CODEX_DIR = join(homedir(), ".codex", "sessions");
+const GEMINI_DIR = join(homedir(), ".gemini", "tmp");
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -19,8 +22,11 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-// Recursively collect *.jsonl files under a directory.
-async function walkJsonl(dir: string): Promise<string[]> {
+// Recursively collect files matching a predicate under a directory.
+async function walk(
+  dir: string,
+  match: (name: string) => boolean,
+): Promise<string[]> {
   const out: string[] = [];
   let entries;
   try {
@@ -30,20 +36,32 @@ async function walkJsonl(dir: string): Promise<string[]> {
   }
   for (const entry of entries) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...(await walkJsonl(full)));
-    else if (entry.isFile() && entry.name.endsWith(".jsonl")) out.push(full);
+    if (entry.isDirectory()) out.push(...(await walk(full, match)));
+    else if (entry.isFile() && match(entry.name)) out.push(full);
   }
   return out;
 }
+
+const isJsonl = (name: string) => name.endsWith(".jsonl");
+// Gemini stores chat checkpoints (`checkpoint-*.json`) and any recorded
+// `*.jsonl` sessions; skip `logs.json` (just user-prompt history, no replies).
+const isGeminiSession = (name: string) =>
+  name.endsWith(".jsonl") ||
+  (name.startsWith("checkpoint") && name.endsWith(".json"));
 
 function parse(
   source: Source,
   raw: string,
   filePath: string,
 ): UnifiedSession | null {
-  return source === "claude-code"
-    ? parseClaudeCodeSession(raw, filePath)
-    : parseCodexSession(raw, filePath);
+  switch (source) {
+    case "claude-code":
+      return parseClaudeCodeSession(raw, filePath);
+    case "codex":
+      return parseCodexSession(raw, filePath);
+    case "gemini":
+      return parseGeminiSession(raw, filePath);
+  }
 }
 
 interface FileRef {
@@ -54,12 +72,16 @@ interface FileRef {
 async function listFiles(): Promise<FileRef[]> {
   const refs: FileRef[] = [];
   if (await exists(CLAUDE_DIR)) {
-    for (const f of await walkJsonl(CLAUDE_DIR))
+    for (const f of await walk(CLAUDE_DIR, isJsonl))
       refs.push({ source: "claude-code", filePath: f });
   }
   if (await exists(CODEX_DIR)) {
-    for (const f of await walkJsonl(CODEX_DIR))
+    for (const f of await walk(CODEX_DIR, isJsonl))
       refs.push({ source: "codex", filePath: f });
+  }
+  if (await exists(GEMINI_DIR)) {
+    for (const f of await walk(GEMINI_DIR, isGeminiSession))
+      refs.push({ source: "gemini", filePath: f });
   }
   return refs;
 }
@@ -131,12 +153,53 @@ export async function listSessions(): Promise<SessionSummary[]> {
   return summaries;
 }
 
+// Cross-session analytics reuse the same scan-and-cache strategy as the session
+// list: a compact per-session record is cached by mtime+size so a rescan only
+// re-parses changed files.
+interface AnalyticsCacheEntry {
+  mtimeMs: number;
+  size: number;
+  record: SessionRecord | null;
+}
+const analyticsCache = new Map<string, AnalyticsCacheEntry>();
+
+export async function getAnalytics(): Promise<Analytics> {
+  const refs = await listFiles();
+  const seen = new Set<string>();
+
+  const records = await mapLimit(refs, 12, async ({ source, filePath }) => {
+    seen.add(filePath);
+    try {
+      const st = await stat(filePath);
+      const cached = analyticsCache.get(filePath);
+      if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
+        return cached.record;
+      }
+      const raw = await readFile(filePath, "utf8");
+      const session = parse(source, raw, filePath);
+      const record = session ? sessionToRecord(session) : null;
+      analyticsCache.set(filePath, { mtimeMs: st.mtimeMs, size: st.size, record });
+      return record;
+    } catch {
+      return null;
+    }
+  });
+
+  for (const key of analyticsCache.keys()) {
+    if (!seen.has(key)) analyticsCache.delete(key);
+  }
+
+  return aggregate(records.filter((r): r is SessionRecord => r != null));
+}
+
 export async function getSession(
   filePath: string,
 ): Promise<UnifiedSession | null> {
   const source: Source = filePath.includes(`${join(".codex", "sessions")}`)
     ? "codex"
-    : "claude-code";
+    : filePath.includes(`${join(".gemini", "tmp")}`)
+      ? "gemini"
+      : "claude-code";
   try {
     const raw = await readFile(filePath, "utf8");
     return parse(source, raw, filePath);
