@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { rankSearch, searchEntry } from "./discovery";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parseUploaded, rankSearch, searchEntry } from "./discovery";
 import type { UnifiedSession } from "./types";
+
+const fixtures = join(import.meta.dir, "../../fixtures");
+const readFixture = (f: string) => readFileSync(join(fixtures, f), "utf8");
 
 function session(over: Partial<UnifiedSession>): UnifiedSession {
   return {
@@ -65,5 +70,23 @@ describe("rankSearch", () => {
 
   test("empty query yields nothing", () => {
     expect(rankSearch(docs, "   ")).toEqual([]);
+  });
+});
+
+describe("parseUploaded", () => {
+  test("auto-detects the source of a dropped transcript", () => {
+    expect(parseUploaded("a.jsonl", readFixture("claude-code-sample.jsonl"))!.source).toBe("claude-code");
+    expect(parseUploaded("b.jsonl", readFixture("codex-sample.jsonl"))!.source).toBe("codex");
+    expect(parseUploaded("c.json", readFixture("gemini-sample.json"))!.source).toBe("gemini");
+  });
+
+  test("stamps an upload: file path so the UI loads it in memory", () => {
+    const s = parseUploaded("my session.jsonl", readFixture("claude-code-sample.jsonl"))!;
+    expect(s.filePath).toBe("upload:my session.jsonl");
+    expect(s.nodes.length).toBeGreaterThan(0);
+  });
+
+  test("returns null for content that matches no adapter", () => {
+    expect(parseUploaded("x.txt", "this is just prose, not a transcript")).toBeNull();
   });
 });

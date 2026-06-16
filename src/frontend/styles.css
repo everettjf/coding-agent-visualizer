@@ -199,6 +199,19 @@ body {
   padding: 1px 5px;
   border-radius: 4px;
 }
+.empty {
+  border: 2px dashed transparent;
+  border-radius: 16px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.empty-drag {
+  border-color: var(--accent);
+  background: rgba(79, 156, 249, 0.08);
+}
+.upload-error {
+  margin-top: 14px;
+  color: #f87171;
+}
 
 /* Detail panel */
 .detail {

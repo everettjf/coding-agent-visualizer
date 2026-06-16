@@ -113,6 +113,28 @@ function parse(
   }
 }
 
+// Parse an uploaded/dropped file whose source is unknown: try every file-based
+// adapter and keep whichever produced the richest session. Lets users drop a
+// transcript that isn't in the auto-discovered locations.
+const FILE_SOURCES: Source[] = ["claude-code", "codex", "gemini"];
+export function parseUploaded(name: string, raw: string): UnifiedSession | null {
+  const filePath = `upload:${name}`;
+  let best: UnifiedSession | null = null;
+  for (const source of FILE_SOURCES) {
+    let candidate: UnifiedSession | null = null;
+    try {
+      candidate = parse(source, raw, filePath);
+    } catch {
+      candidate = null;
+    }
+    if (candidate?.nodes.length && (!best || candidate.nodes.length > best.nodes.length)) {
+      best = candidate;
+    }
+  }
+  if (best) best.filePath = filePath;
+  return best;
+}
+
 interface FileRef {
   source: Source;
   filePath: string;

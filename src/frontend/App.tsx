@@ -12,6 +12,7 @@ import {
   Download,
   TrendingUp,
   GitCompareArrows,
+  Upload,
   type LucideIcon,
 } from "lucide-react";
 import type { SessionSummary, SessionNode, UnifiedSession, Source } from "../lib/types";
@@ -120,6 +121,8 @@ export function App() {
   const [showCompare, setShowCompare] = useState(false);
   const [searchHits, setSearchHits] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const loadSessions = () => {
     setLoading(true);
@@ -134,6 +137,35 @@ export function App() {
 
   useEffect(loadSessions, []);
 
+  // Upload / drop a transcript that isn't in the auto-discovered directories:
+  // POST its contents, get back a parsed session, and show it in place.
+  const openFile = async (file: File) => {
+    setUploadError(null);
+    try {
+      const content = await file.text();
+      const res = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: file.name, content }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "parse failed" }));
+        setUploadError(error ?? "Could not parse that file.");
+        return;
+      }
+      const s: UnifiedSession = await res.json();
+      const { nodes, ...summary } = s;
+      setShowAnalytics(false);
+      setShowCompare(false);
+      setLive(false);
+      setActiveNode(null);
+      setSelected(summary);
+      setSession(s); // in-memory; the load effect skips upload: paths
+    } catch {
+      setUploadError("Could not read that file.");
+    }
+  };
+
   // Esc closes the node detail panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -145,6 +177,8 @@ export function App() {
 
   useEffect(() => {
     if (!selected) return;
+    // Uploaded sessions are already held in memory — nothing to fetch or watch.
+    if (selected.filePath.startsWith("upload:")) return;
     setSession(null);
     setActiveNode(null);
     const path = encodeURIComponent(selected.filePath);
@@ -291,6 +325,20 @@ export function App() {
             <GitCompareArrows size={14} />
             Compare sessions
           </button>
+          <label className="analytics-btn" title="Open a transcript file (.jsonl / .json)">
+            <Upload size={14} />
+            Open a file…
+            <input
+              type="file"
+              accept=".jsonl,.json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void openFile(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
         </div>
         <div className="session-list">
           {loading && (
@@ -416,7 +464,20 @@ export function App() {
           </>
         )}
         {!showAnalytics && !showCompare && !selected && (
-          <div className="empty">
+          <div
+            className={`empty ${dragging ? "empty-drag" : ""}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f) void openFile(f);
+            }}
+          >
             <div className="empty-logo" />
             <h2>Coding Agent Visualizer</h2>
             <p className="muted">
@@ -425,7 +486,11 @@ export function App() {
               (<code>~/.gemini/tmp</code>) transcripts and turns them into an
               interactive execution graph, timeline, file heatmap and analytics.
             </p>
-            <p className="muted small">Select a session on the left to begin.</p>
+            <p className="muted small">
+              Select a session on the left, or <strong>drop a transcript here</strong> to
+              visualize a file from anywhere.
+            </p>
+            {uploadError && <p className="upload-error small">{uploadError}</p>}
           </div>
         )}
         {!showAnalytics && !showCompare && selected && (
