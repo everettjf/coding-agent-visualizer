@@ -67,7 +67,15 @@ machine.
 
 ## 🚀 Quick start
 
-Requires [Bun](https://bun.sh) (≥ 1.2).
+Requires [Bun](https://bun.com/) (≥ 1.2). Install it if you haven't:
+
+```bash
+# macOS & Linux
+curl -fsSL https://bun.sh/install | bash
+
+# Windows (PowerShell)
+powershell -c "irm bun.sh/install.ps1 | iex"
+```
 
 **Run it without cloning:**
 

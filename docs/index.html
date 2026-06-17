@@ -162,6 +162,7 @@
   <div class="links">
     <a href="#features">Features</a>
     <a href="#how">How it works</a>
+    <a href="#start">Quick start</a>
     <a href="#roadmap">Roadmap</a>
     <a class="btn btn-ghost" href="https://github.com/everettjf/coding-agent-visualizer">★ GitHub</a>
   </div>
@@ -236,6 +237,24 @@
   </div>
 </div></section>
 
+<section id="start" style="padding-top:20px"><div class="wrap">
+  <p class="eyebrow">Quick start</p>
+  <h2>Running in under a minute</h2>
+  <p class="lede">Requires <a href="https://bun.com/">Bun</a>. Install it, then run the visualizer — no clone needed.</p>
+
+  <div style="margin-top:30px" class="code">
+    <div class="top"><i style="background:#ff5f56"></i><i style="background:#ffbd2e"></i><i style="background:#27c93f"></i></div>
+<pre><span class="c"># 1 · Install Bun — macOS &amp; Linux</span>
+curl -fsSL https://bun.sh/install | bash
+
+<span class="c"># …or Windows (PowerShell)</span>
+powershell -c "irm bun.sh/install.ps1 | iex"
+
+<span class="c"># 2 · Run it — no clone needed</span>
+bunx coding-agent-visualizer   <span class="c"># → http://localhost:3000</span></pre>
+  </div>
+</div></section>
+
 <section style="padding-top:20px"><div class="wrap">
   <p class="eyebrow">Supported agents</p>
   <h2>Built to grow</h2>
@@ -265,7 +284,7 @@
 
 <section style="padding-top:10px"><div class="band">
   <h2 style="margin-bottom:14px">Make your agent runs legible</h2>
-  <p style="color:var(--muted);max-width:520px;margin:0 auto 28px">Clone it, run <code>bun dev</code>, and explore your own sessions in under a minute. MIT licensed.</p>
+  <p style="color:var(--muted);max-width:520px;margin:0 auto 28px">Run <code>bunx coding-agent-visualizer</code> and explore your own sessions in under a minute. No clone, no backend. MIT licensed.</p>
   <a class="btn btn-primary" href="https://github.com/everettjf/coding-agent-visualizer">View on GitHub</a>
 </div></section>
 
