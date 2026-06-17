@@ -12,7 +12,7 @@ const browser = await puppeteer.launch({
 });
 const page = await browser.newPage();
 await page.setViewport({ width: 1480, height: 920, deviceScaleFactor: 2 });
-await page.goto("http://localhost:3000/", { waitUntil: "networkidle2" });
+await page.goto("http://localhost:19876/", { waitUntil: "networkidle2" });
 
 await page.waitForSelector(".session-item", { timeout: 15000 });
 // Pick a content-rich session: most tool calls wins.

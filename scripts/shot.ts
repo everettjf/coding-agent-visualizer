@@ -21,7 +21,7 @@ page.on("console", (m) => {
 });
 page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
 
-await page.goto("http://localhost:3000/", { waitUntil: "networkidle2", timeout: 30000 });
+await page.goto("http://localhost:19876/", { waitUntil: "networkidle2", timeout: 30000 });
 
 // Pick the session for THIS project (its title contains the cwd basename).
 await page.waitForSelector(".session-item", { timeout: 15000 });

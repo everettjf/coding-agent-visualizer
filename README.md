@@ -80,7 +80,7 @@ powershell -c "irm bun.sh/install.ps1 | iex"
 **Run it without cloning:**
 
 ```bash
-bunx coding-agent-visualizer   # → http://localhost:3000
+bunx coding-agent-visualizer   # → http://localhost:19876
 ```
 
 Set a different port with `PORT=4000 bunx coding-agent-visualizer`. After a
@@ -93,7 +93,7 @@ the short `cav` command.
 git clone https://github.com/everettjf/coding-agent-visualizer.git
 cd coding-agent-visualizer
 bun install
-bun dev          # → http://localhost:3000
+bun dev          # → http://localhost:19876
 ```
 
 The app auto-discovers sessions from:

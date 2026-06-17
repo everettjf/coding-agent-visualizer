@@ -6,7 +6,7 @@ import { getAnalytics, getSession, listSessions } from "../lib/discovery";
 import index from "../frontend/index.html";
 
 const server = Bun.serve({
-  port: Number(process.env.PORT ?? 3000),
+  port: Number(process.env.PORT ?? 19876),
   development: process.env.NODE_ENV !== "production",
 
   routes: {
