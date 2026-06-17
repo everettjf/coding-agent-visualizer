@@ -71,21 +71,33 @@ machine.
 
 ## 🚀 Quick start
 
-Requires [Bun](https://bun.sh) (≥ 1.2).
-
-Run it with **no clone** — straight from the published package:
+Requires [Bun](https://bun.com/) (≥ 1.2). Install it if you haven't:
 
 ```bash
-bunx coding-agent-visualizer    # → http://localhost:3000
+# macOS & Linux
+curl -fsSL https://bun.sh/install | bash
+
+# Windows (PowerShell)
+powershell -c "irm bun.sh/install.ps1 | iex"
 ```
 
-Or from source for development:
+**Run it without cloning:**
+
+```bash
+bunx coding-agent-visualizer@latest   # → http://localhost:19876
+```
+
+Set a different port with `PORT=4000 bunx coding-agent-visualizer@latest`. After a
+global install (`bun add -g coding-agent-visualizer@latest`) you can launch it with
+the short `cav` command.
+
+**Or clone for development:**
 
 ```bash
 git clone https://github.com/everettjf/coding-agent-visualizer.git
 cd coding-agent-visualizer
 bun install
-bun dev          # → http://localhost:3000
+bun dev          # → http://localhost:19876
 ```
 
 The app auto-discovers sessions from:
@@ -121,7 +133,7 @@ src/
 │     ├─ opencode.ts      # session/message/part JSON files → nodes
 │     ├─ cursor.ts        # state.vscdb SQLite composer chats → nodes
 │     └─ cline.ts         # Cline task JSON (Anthropic messages + UI events) → nodes
-├─ bin/                   # `bunx coding-agent-visualizer` launcher
+├─ cli.ts                 # `bunx coding-agent-visualizer` launcher
 ├─ server/index.ts        # Bun.serve: UI + /api/sessions, /api/session, /api/analytics, /api/search, /api/parse
 └─ frontend/
    ├─ App.tsx             # sidebar, search, Radix tabs, export menu, panel orchestration

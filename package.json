@@ -1,14 +1,14 @@
 {
   "name": "coding-agent-visualizer",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "type": "module",
-  "description": "Turn local coding-agent session files into an interactive execution graph, span waterfall, token-cost flame graph, file heatmap and analytics.",
-  "license": "MIT",
-  "homepage": "https://everettjf.github.io/coding-agent-visualizer/",
+  "description": "Local visualizer for Claude Code, Codex, Gemini, OpenCode, Cursor and Cline agent transcripts.",
+  "homepage": "https://github.com/everettjf/coding-agent-visualizer",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/everettjf/coding-agent-visualizer.git"
   },
+  "license": "MIT",
   "keywords": [
     "claude-code",
     "codex",
@@ -19,20 +19,18 @@
     "observability"
   ],
   "bin": {
-    "coding-agent-visualizer": "bin/coding-agent-visualizer.ts",
-    "cav": "bin/coding-agent-visualizer.ts"
+    "coding-agent-visualizer": "src/cli.ts",
+    "cav": "src/cli.ts"
   },
   "files": [
-    "bin",
     "src",
     "bunfig.toml",
     "tsconfig.json",
     "README.md",
-    "LICENSE",
-    "assets/banner.svg"
+    "LICENSE"
   ],
   "engines": {
-    "bun": ">=1.2.0"
+    "bun": ">=1.1.0"
   },
   "scripts": {
     "dev": "bun --hot src/server/index.ts",

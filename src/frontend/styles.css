@@ -51,6 +51,23 @@ body {
   display: grid;
   grid-template-columns: 300px 1fr;
   height: 100vh;
+  position: relative;
+}
+
+/* Draggable divider between sidebar and main */
+.resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  margin-left: -3px;
+  cursor: col-resize;
+  z-index: 20;
+}
+.resizer:hover,
+.resizer:active {
+  background: var(--accent);
+  opacity: 0.5;
 }
 
 .muted {
@@ -95,6 +112,33 @@ body {
 .session-list {
   overflow-y: auto;
   flex: 1;
+}
+.sidebar-foot {
+  display: flex;
+  gap: 14px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+.foot-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 12px;
+}
+.foot-link:hover {
+  color: var(--text);
+}
+.foot-version {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+.foot-version:hover {
+  color: var(--text);
 }
 .session-item {
   display: block;
@@ -229,6 +273,21 @@ body {
   display: flex;
   flex-direction: column;
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.4);
+}
+.detail-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  margin-left: -3px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.detail-resizer:hover,
+.detail-resizer:active {
+  background: var(--accent);
+  opacity: 0.5;
 }
 .detail-head {
   display: flex;

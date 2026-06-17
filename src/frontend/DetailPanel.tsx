@@ -84,9 +84,13 @@ function DiffBlock({ input, file }: { input: any; file?: string }) {
 export function DetailPanel({
   node,
   onClose,
+  width,
+  onResizeStart,
 }: {
   node: SessionNode;
   onClose: () => void;
+  width: number;
+  onResizeStart: (e: React.MouseEvent) => void;
 }) {
   const color = roleColor(node.role);
   const isFileEdit =
@@ -94,7 +98,12 @@ export function DetailPanel({
     /^(Edit|MultiEdit|Write|NotebookEdit)$/.test(node.tool.name);
 
   return (
-    <aside className="detail">
+    <aside className="detail" style={{ width: `${width}px` }}>
+      <div
+        className="detail-resizer"
+        onMouseDown={onResizeStart}
+        title="Drag to resize panel"
+      />
       <div className="detail-head">
         <span className="gnode-dot" style={{ background: color }} />
         <span className="detail-title">

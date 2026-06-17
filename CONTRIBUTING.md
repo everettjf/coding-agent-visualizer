@@ -10,7 +10,7 @@ Requires [Bun](https://bun.sh) ≥ 1.2.
 
 ```bash
 bun install
-bun dev            # http://localhost:3000
+bun dev            # http://localhost:19876
 bun run typecheck  # keep this green before pushing
 ```
 

@@ -13,8 +13,26 @@ import {
   TrendingUp,
   GitCompareArrows,
   Upload,
+  Bug,
   type LucideIcon,
 } from "lucide-react";
+
+const REPO_URL = "https://github.com/everettjf/coding-agent-visualizer";
+
+// lucide dropped brand icons, so the GitHub mark is inlined here.
+function GithubMark({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.33-1.76-1.33-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.49 5.92.43.37.81 1.1.81 2.22 0 1.61-.01 2.9-.01 3.29 0 .32.22.7.83.58A12 12 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z" />
+    </svg>
+  );
+}
 import type { SessionSummary, SessionNode, UnifiedSession, Source } from "../lib/types";
 import type { SearchHit } from "../lib/discovery";
 import { fmtTokens } from "../lib/stats";
@@ -30,6 +48,7 @@ import { FlameView } from "./views/FlameView";
 import { AnalyticsView } from "./views/AnalyticsView";
 import { CompareView } from "./views/CompareView";
 import { SourceBadge } from "./ui";
+import { version } from "../../package.json";
 
 type ViewKey =
   | "graph"
@@ -123,6 +142,46 @@ export function App() {
   const [searching, setSearching] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const saved = Number(localStorage.getItem("sidebarWidth"));
+    return saved >= 200 && saved <= 600 ? saved : 300;
+  });
+  const [detailWidth, setDetailWidth] = useState<number>(() => {
+    const saved = Number(localStorage.getItem("detailWidth"));
+    return saved >= 320 && saved <= 900 ? saved : 420;
+  });
+
+  // Drag a divider to resize a panel. `edge` decides which window edge the
+  // width is measured from: "left" for the sidebar, "right" for the detail panel.
+  const makeResizer =
+    (edge: "left" | "right", min: number, max: number, set: (w: number) => void) =>
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const onMove = (ev: MouseEvent) => {
+        const raw = edge === "left" ? ev.clientX : window.innerWidth - ev.clientX;
+        set(Math.min(max, Math.max(min, raw)));
+      };
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    };
+
+  const startResize = makeResizer("left", 200, 600, setSidebarWidth);
+  const startDetailResize = makeResizer("right", 320, 900, setDetailWidth);
+
+  useEffect(() => {
+    localStorage.setItem("sidebarWidth", String(sidebarWidth));
+  }, [sidebarWidth]);
+  useEffect(() => {
+    localStorage.setItem("detailWidth", String(detailWidth));
+  }, [detailWidth]);
 
   const loadSessions = () => {
     setLoading(true);
@@ -273,11 +332,14 @@ export function App() {
   ];
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      style={{ gridTemplateColumns: `${sidebarWidth}px 1fr` }}
+    >
       <aside className="sidebar">
         <div className="sidebar-head">
           <h1>
-            <span className="logo-dot" /> Agent Visualizer
+            <span className="logo-dot" /> Coding Agent Visualizer
           </h1>
           <input
             className="search"
@@ -373,7 +435,7 @@ export function App() {
               {searchHits?.map((hit) => (
                 <button
                   key={`hit:${hit.summary.filePath}`}
-                  className={`session-item ${selected?.filePath === hit.summary.filePath && !showAnalytics ? "active" : ""}`}
+                  className={`session-item ${selected?.filePath === hit.summary.filePath && !showAnalytics && !showCompare ? "active" : ""}`}
                   onClick={() => {
                     setSelected(hit.summary);
                     setShowAnalytics(false);
@@ -418,7 +480,45 @@ export function App() {
             </div>
           ))}
         </div>
+        <div className="sidebar-foot">
+          <a
+            className="foot-link"
+            href={REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            title="View source on GitHub"
+          >
+            <GithubMark size={14} />
+            GitHub
+          </a>
+          <a
+            className="foot-link"
+            href={`${REPO_URL}/issues/new`}
+            target="_blank"
+            rel="noreferrer"
+            title="Report an issue"
+          >
+            <Bug size={14} />
+            Report issue
+          </a>
+          <a
+            className="foot-version"
+            href={`${REPO_URL}/releases`}
+            target="_blank"
+            rel="noreferrer"
+            title="Release notes"
+          >
+            v{version}
+          </a>
+        </div>
       </aside>
+
+      <div
+        className="resizer"
+        style={{ left: `${sidebarWidth}px` }}
+        onMouseDown={startResize}
+        title="Drag to resize sidebar"
+      />
 
       <main className="main">
         {showAnalytics && (
@@ -574,7 +674,12 @@ export function App() {
       </main>
 
       {activeNode && (
-        <DetailPanel node={activeNode} onClose={() => setActiveNode(null)} />
+        <DetailPanel
+          node={activeNode}
+          onClose={() => setActiveNode(null)}
+          width={detailWidth}
+          onResizeStart={startDetailResize}
+        />
       )}
     </div>
   );
