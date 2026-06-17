@@ -4,6 +4,7 @@
 import { watch } from "node:fs";
 import { getAnalytics, getSession, listSessions } from "../lib/discovery";
 import index from "../frontend/index.html";
+import { version } from "../../package.json";
 
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 19876),
@@ -110,4 +111,4 @@ const server = Bun.serve({
   },
 });
 
-console.log(`▸ Coding Agent Visualizer running at ${server.url}`);
+console.log(`▸ Coding Agent Visualizer v${version} running at ${server.url}`);

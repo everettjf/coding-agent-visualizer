@@ -130,6 +130,16 @@ body {
 .foot-link:hover {
   color: var(--text);
 }
+.foot-version {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+.foot-version:hover {
+  color: var(--text);
+}
 .session-item {
   display: block;
   width: 100%;

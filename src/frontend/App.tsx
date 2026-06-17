@@ -44,6 +44,7 @@ import { WaterfallView } from "./views/WaterfallView";
 import { FlameView } from "./views/FlameView";
 import { AnalyticsView } from "./views/AnalyticsView";
 import { SourceBadge } from "./ui";
+import { version } from "../../package.json";
 
 type ViewKey =
   | "graph"
@@ -372,6 +373,15 @@ export function App() {
           >
             <Bug size={14} />
             Report issue
+          </a>
+          <a
+            className="foot-version"
+            href={`${REPO_URL}/releases`}
+            target="_blank"
+            rel="noreferrer"
+            title="Release notes"
+          >
+            v{version}
           </a>
         </div>
       </aside>
