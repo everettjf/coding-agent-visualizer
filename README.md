@@ -80,11 +80,11 @@ powershell -c "irm bun.sh/install.ps1 | iex"
 **Run it without cloning:**
 
 ```bash
-bunx coding-agent-visualizer   # → http://localhost:19876
+bunx coding-agent-visualizer@latest   # → http://localhost:19876
 ```
 
-Set a different port with `PORT=4000 bunx coding-agent-visualizer`. After a
-global install (`bun add -g coding-agent-visualizer`) you can launch it with
+Set a different port with `PORT=4000 bunx coding-agent-visualizer@latest`. After a
+global install (`bun add -g coding-agent-visualizer@latest`) you can launch it with
 the short `cav` command.
 
 **Or clone for development:**
