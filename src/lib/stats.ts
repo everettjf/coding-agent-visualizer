@@ -166,11 +166,19 @@ export function buildTrace(session: UnifiedSession): Trace {
 
   const { childrenOf } = childMap(session.nodes);
   const spans: TraceSpan[] = [];
+  // Indent by *sub-agent nesting*, not raw parent-chain depth: a coding-agent
+  // conversation is a linear chain (each turn's parent is the previous one), so
+  // tree depth would stair-step the main spine off-screen. Instead we only step
+  // in when a branch crosses into a sidechain (sub-agent), which is the "call
+  // depth" the waterfall is meant to show.
   const visit = (n: SessionNode, depth: number, parentStart: number) => {
     const s = span.get(n.id) ?? { start: parentStart, duration: 0 };
     const kids = childrenOf.get(n.id) ?? [];
     spans.push({ node: n, depth, start: s.start, duration: s.duration, hasChildren: kids.length > 0 });
-    for (const c of kids) visit(c, depth + 1, s.start);
+    for (const c of kids) {
+      const entersSidechain = !!c.isSidechain && !n.isSidechain;
+      visit(c, entersSidechain ? depth + 1 : depth, s.start);
+    }
   };
   for (const root of childrenOf.get(null) ?? []) visit(root, 0, 0);
 

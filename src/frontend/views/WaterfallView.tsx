@@ -74,10 +74,11 @@ export function WaterfallView({
                 active ? "bg-white/[0.07]" : ""
               }`}
             >
-              {/* Label column (fixed width, indented by depth) */}
+              {/* Label column (fixed width, indented by sub-agent depth).
+                  Cap the indent so labels never get pushed out of the column. */}
               <div
                 className="flex w-[250px] shrink-0 items-center gap-1.5 overflow-hidden"
-                style={{ paddingLeft: s.depth * 12 }}
+                style={{ paddingLeft: Math.min(s.depth, 10) * 12 }}
               >
                 <Icon size={12} style={{ color }} className="shrink-0" />
                 <span className="shrink-0 text-xs" style={{ color }}>
