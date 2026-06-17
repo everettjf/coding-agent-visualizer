@@ -1,6 +1,6 @@
 {
   "name": "coding-agent-visualizer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Local visualizer for Claude Code, Codex, Gemini, OpenCode and Cursor agent transcripts.",
   "homepage": "https://github.com/everettjf/coding-agent-visualizer",
