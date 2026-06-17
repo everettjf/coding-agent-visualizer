@@ -114,6 +114,46 @@ export function App() {
   const [view, setView] = useState<ViewKey>("graph");
   const [live, setLive] = useState(true);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const saved = Number(localStorage.getItem("sidebarWidth"));
+    return saved >= 200 && saved <= 600 ? saved : 300;
+  });
+  const [detailWidth, setDetailWidth] = useState<number>(() => {
+    const saved = Number(localStorage.getItem("detailWidth"));
+    return saved >= 320 && saved <= 900 ? saved : 420;
+  });
+
+  // Drag a divider to resize a panel. `edge` decides which window edge the
+  // width is measured from: "left" for the sidebar, "right" for the detail panel.
+  const makeResizer =
+    (edge: "left" | "right", min: number, max: number, set: (w: number) => void) =>
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const onMove = (ev: MouseEvent) => {
+        const raw = edge === "left" ? ev.clientX : window.innerWidth - ev.clientX;
+        set(Math.min(max, Math.max(min, raw)));
+      };
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    };
+
+  const startResize = makeResizer("left", 200, 600, setSidebarWidth);
+  const startDetailResize = makeResizer("right", 320, 900, setDetailWidth);
+
+  useEffect(() => {
+    localStorage.setItem("sidebarWidth", String(sidebarWidth));
+  }, [sidebarWidth]);
+  useEffect(() => {
+    localStorage.setItem("detailWidth", String(detailWidth));
+  }, [detailWidth]);
 
   const loadSessions = () => {
     setLoading(true);
@@ -204,11 +244,14 @@ export function App() {
   ];
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      style={{ gridTemplateColumns: `${sidebarWidth}px 1fr` }}
+    >
       <aside className="sidebar">
         <div className="sidebar-head">
           <h1>
-            <span className="logo-dot" /> Agent Visualizer
+            <span className="logo-dot" /> Coding Agent Visualizer
           </h1>
           <input
             className="search"
@@ -292,6 +335,13 @@ export function App() {
           ))}
         </div>
       </aside>
+
+      <div
+        className="resizer"
+        style={{ left: `${sidebarWidth}px` }}
+        onMouseDown={startResize}
+        title="Drag to resize sidebar"
+      />
 
       <main className="main">
         {showAnalytics && (
@@ -408,7 +458,12 @@ export function App() {
       </main>
 
       {activeNode && (
-        <DetailPanel node={activeNode} onClose={() => setActiveNode(null)} />
+        <DetailPanel
+          node={activeNode}
+          onClose={() => setActiveNode(null)}
+          width={detailWidth}
+          onResizeStart={startDetailResize}
+        />
       )}
     </div>
   );
