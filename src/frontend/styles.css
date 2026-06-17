@@ -113,6 +113,23 @@ body {
   overflow-y: auto;
   flex: 1;
 }
+.sidebar-foot {
+  display: flex;
+  gap: 14px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+.foot-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 12px;
+}
+.foot-link:hover {
+  color: var(--text);
+}
 .session-item {
   display: block;
   width: 100%;
