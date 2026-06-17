@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { parseClaudeCodeSession } from "./claudeCode";
 import { parseCodexSession } from "./codex";
 import { parseGeminiSession } from "./gemini";
+import { buildClineSession } from "./cline";
 import { computeStats } from "../stats";
 
 const fixtures = join(import.meta.dir, "../../../fixtures");
@@ -136,5 +137,46 @@ describe("Gemini adapter", () => {
     const s = parseGeminiSession(bare, "bare.json")!;
     expect(s.title).toBe("hi there");
     expect(s.nodes.map((n) => n.role)).toEqual(["user", "assistant"]);
+  });
+});
+
+describe("Cline adapter", () => {
+  const history = JSON.parse(read("cline/task-123/api_conversation_history.json"));
+  const ui = JSON.parse(read("cline/task-123/ui_messages.json"));
+  const session = buildClineSession("task-123", history, ui)!;
+
+  test("parses metadata and unwraps the <task> title", () => {
+    expect(session.source).toBe("cline");
+    expect(session.title).toBe("Add a hello function to utils.ts");
+    expect(session.filePath).toBe("cline:task-123");
+    expect(session.startedAt).toBe(new Date(1750000000000).toISOString());
+  });
+
+  test("maps user / reasoning / assistant / tool roles", () => {
+    const roles = session.nodes.map((n) => n.role);
+    expect(roles).toContain("user");
+    expect(roles).toContain("reasoning"); // the thinking-only assistant turn
+    expect(roles).toContain("assistant");
+    expect(roles).toContain("tool");
+    const ids = new Set(session.nodes.map((n) => n.id));
+    for (const n of session.nodes) {
+      if (n.parentId) expect(ids.has(n.parentId)).toBe(true);
+    }
+  });
+
+  test("pairs tool_result back to its tool_use and extracts files", () => {
+    const readTool = session.nodes.find((n) => n.tool?.name === "read_file");
+    expect(readTool!.tool!.result).toContain("export const x = 1;");
+    expect(readTool!.tool!.files).toEqual(["/home/user/demo-project/utils.ts"]);
+    const replaceTool = session.nodes.find((n) => n.tool?.name === "replace_in_file");
+    expect(replaceTool!.tool!.result).toContain("successfully saved");
+  });
+
+  test("assigns api_req_started token usage to assistant turns", () => {
+    expect(session.totalTokens).toBe(320 + 40 + 380 + 90 + 410 + 30);
+    const stats = computeStats(session);
+    expect(stats.totals.cacheTokens).toBe(100 + 50 + 200);
+    expect(stats.totals.cacheCreationTokens).toBe(100);
+    expect(stats.totals.cacheReadTokens).toBe(250);
   });
 });

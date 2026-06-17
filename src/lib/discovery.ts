@@ -8,8 +8,39 @@ import { parseCodexSession } from "./adapters/codex";
 import { parseGeminiSession } from "./adapters/gemini";
 import { loadOpenCodeSessions, getOpenCodeSession } from "./adapters/opencode";
 import { loadCursorSessions, getCursorSession } from "./adapters/cursor";
+import { loadClineSessions, getClineSession } from "./adapters/cline";
 import { aggregate, sessionToRecord, type Analytics, type SessionRecord } from "./analytics";
 import type { Source, SessionSummary, UnifiedSession } from "./types";
+
+export interface SearchHit {
+  summary: SessionSummary;
+  /** Number of matched terms found in the session body. */
+  hits: number;
+  /** A short excerpt of the body around the first match (original case). */
+  snippet: string;
+}
+
+// Flatten a session's bodies (message text, reasoning, tool names + I/O) into one
+// searchable string. Capped so a pathologically large session can't blow up memory.
+const HAYSTACK_CAP = 500_000;
+function sessionText(session: UnifiedSession): string {
+  const parts: string[] = [session.title];
+  for (const n of session.nodes) {
+    if (n.text) parts.push(n.text);
+    if (n.thinking) parts.push(n.thinking);
+    if (n.tool) {
+      parts.push(n.tool.name);
+      if (n.tool.input != null) parts.push(stringify(n.tool.input));
+      if (n.tool.result != null) parts.push(stringify(n.tool.result));
+    }
+    if (parts.reduce((a, p) => a + p.length, 0) > HAYSTACK_CAP) break;
+  }
+  return parts.join("\n").slice(0, HAYSTACK_CAP);
+}
+
+function stringify(v: unknown): string {
+  return typeof v === "string" ? v : JSON.stringify(v);
+}
 
 // Non-file sources don't live as one JSONL per session (OpenCode = many small
 // JSON files, Cursor = a SQLite DB), so each exposes a loader returning fully
@@ -17,6 +48,7 @@ import type { Source, SessionSummary, UnifiedSession } from "./types";
 const EXTRA_SOURCES: (() => Promise<UnifiedSession[]>)[] = [
   loadOpenCodeSessions,
   loadCursorSessions,
+  loadClineSessions,
 ];
 
 async function loadExtraSessions(): Promise<UnifiedSession[]> {
@@ -81,6 +113,28 @@ function parse(
     default:
       return null; // opencode / cursor are not file-based (handled separately)
   }
+}
+
+// Parse an uploaded/dropped file whose source is unknown: try every file-based
+// adapter and keep whichever produced the richest session. Lets users drop a
+// transcript that isn't in the auto-discovered locations.
+const FILE_SOURCES: Source[] = ["claude-code", "codex", "gemini"];
+export function parseUploaded(name: string, raw: string): UnifiedSession | null {
+  const filePath = `upload:${name}`;
+  let best: UnifiedSession | null = null;
+  for (const source of FILE_SOURCES) {
+    let candidate: UnifiedSession | null = null;
+    try {
+      candidate = parse(source, raw, filePath);
+    } catch {
+      candidate = null;
+    }
+    if (candidate?.nodes.length && (!best || candidate.nodes.length > best.nodes.length)) {
+      best = candidate;
+    }
+  }
+  if (best) best.filePath = filePath;
+  return best;
 }
 
 interface FileRef {
@@ -217,6 +271,109 @@ export async function getAnalytics(): Promise<Analytics> {
   return aggregate(all);
 }
 
+// Full-text search across every session body. Like the summary scan, the
+// flattened searchable text is cached by mtime+size so repeated queries only
+// re-read files that actually changed.
+interface SearchCacheEntry {
+  mtimeMs: number;
+  size: number;
+  summary: SessionSummary;
+  text: string;
+}
+const searchCache = new Map<string, SearchCacheEntry>();
+
+function scoreText(text: string, terms: string[]): { hits: number; at: number } {
+  const lower = text.toLowerCase();
+  let hits = 0;
+  let at = -1;
+  for (const term of terms) {
+    const idx = lower.indexOf(term);
+    if (idx === -1) return { hits: 0, at: -1 }; // AND: every term must appear
+    hits++;
+    if (at === -1 || idx < at) at = idx;
+  }
+  return { hits, at };
+}
+
+function snippetAround(text: string, at: number, span = 120): string {
+  const start = Math.max(0, at - span / 3);
+  const raw = text.slice(start, start + span).replace(/\s+/g, " ").trim();
+  return (start > 0 ? "…" : "") + raw + (start + span < text.length ? "…" : "");
+}
+
+/** Pure search core: rank pre-flattened {summary, text} entries against terms. */
+export function rankSearch(
+  entries: { summary: SessionSummary; text: string }[],
+  query: string,
+): SearchHit[] {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return [];
+  const results: SearchHit[] = [];
+  for (const e of entries) {
+    const { hits, at } = scoreText(e.text, terms);
+    if (hits > 0) {
+      results.push({ summary: e.summary, hits, snippet: snippetAround(e.text, at) });
+    }
+  }
+  results.sort(
+    (a, b) =>
+      b.hits - a.hits ||
+      (b.summary.endedAt ?? "").localeCompare(a.summary.endedAt ?? ""),
+  );
+  return results.slice(0, 50);
+}
+
+/** Flatten a session into the {summary, text} entry the search core consumes. */
+export function searchEntry(session: UnifiedSession): {
+  summary: SessionSummary;
+  text: string;
+} {
+  const { nodes, ...summary } = session;
+  return { summary, text: sessionText(session) };
+}
+
+export async function searchSessions(query: string): Promise<SearchHit[]> {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return [];
+
+  const refs = await listFiles();
+  const seen = new Set<string>();
+  const entries = await mapLimit(refs, 12, async ({ source, filePath }) => {
+    seen.add(filePath);
+    try {
+      const st = await stat(filePath);
+      const cached = searchCache.get(filePath);
+      if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
+        return cached;
+      }
+      const raw = await readFile(filePath, "utf8");
+      const session = parse(source, raw, filePath);
+      if (!session) return null;
+      const { nodes, ...summary } = session;
+      const entry: SearchCacheEntry = {
+        mtimeMs: st.mtimeMs,
+        size: st.size,
+        summary,
+        text: sessionText(session),
+      };
+      searchCache.set(filePath, entry);
+      return entry;
+    } catch {
+      return null;
+    }
+  });
+  for (const key of searchCache.keys()) {
+    if (!seen.has(key)) searchCache.delete(key);
+  }
+
+  const all: { summary: SessionSummary; text: string }[] = entries.filter(
+    (e): e is SearchCacheEntry => e != null,
+  );
+  for (const s of await loadExtraSessions()) all.push(searchEntry(s));
+
+  return rankSearch(all, query);
+}
+
 export async function getSession(
   filePath: string,
 ): Promise<UnifiedSession | null> {
@@ -224,6 +381,8 @@ export async function getSession(
     return getOpenCodeSession(filePath.slice("opencode:".length));
   if (filePath.startsWith("cursor:"))
     return getCursorSession(filePath.slice("cursor:".length));
+  if (filePath.startsWith("cline:"))
+    return getClineSession(filePath.slice("cline:".length));
 
   const source: Source = filePath.includes(`${join(".codex", "sessions")}`)
     ? "codex"

@@ -11,6 +11,7 @@ const rec = (over: Partial<SessionRecord>): SessionRecord => ({
   inputTokens: 60,
   outputTokens: 40,
   cacheTokens: 0,
+  cost: 0,
   toolCalls: 1,
   tools: { Read: 1 },
   ...over,
@@ -79,5 +80,12 @@ describe("sessionToRecord", () => {
     expect(r.outputTokens).toBe(40);
     expect(r.cacheTokens).toBe(5);
     expect(r.tools).toEqual({ shell: 1 });
+  });
+
+  test("estimates cost from the breakdown under the model's pricing", () => {
+    // gpt-5-codex: 50 input·$1.25 + 40 output·$10 + 5 cacheRead·$0.125, per 1M
+    const expected = (50 * 1.25 + 40 * 10 + 5 * 0.125) / 1_000_000;
+    expect(r.cost).toBeCloseTo(expected, 10);
+    expect(aggregate([r]).totalCost).toBeCloseTo(expected, 10);
   });
 });

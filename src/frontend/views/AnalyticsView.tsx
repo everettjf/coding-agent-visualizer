@@ -3,11 +3,15 @@ import { Line, Bar, Doughnut } from "react-chartjs-2";
 import "../lib/charts";
 import type { Analytics } from "../../lib/analytics";
 import { fmtTokens } from "../../lib/stats";
+import { fmtCost } from "../../lib/pricing";
 
 const SOURCE_COLOR: Record<string, string> = {
   "claude-code": "#22c55e",
   codex: "#4f9cf9",
   gemini: "#a78bfa",
+  opencode: "#f59e0b",
+  cursor: "#ec4899",
+  cline: "#14b8a6",
 };
 
 function Card({ label, value, accent }: { label: string; value: string | number; accent: string }) {
@@ -93,11 +97,12 @@ export function AnalyticsView() {
 
   return (
     <div className="h-full overflow-auto p-5">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Card label="Sessions" value={data.sessionCount} accent="#4f9cf9" />
+        <Card label="Est. cost" value={fmtCost(data.totalCost)} accent="#22c55e" />
         <Card label="Total tokens" value={fmtTokens(data.totalTokens)} accent="#ec4899" />
         <Card label="Tool calls" value={data.totalToolCalls.toLocaleString()} accent="#f59e0b" />
-        <Card label="Active days" value={data.daily.length} accent="#22c55e" />
+        <Card label="Active days" value={data.daily.length} accent="#a78bfa" />
       </div>
 
       <section className="mt-5 rounded-xl border border-border bg-panel p-4">
@@ -167,7 +172,10 @@ export function AnalyticsView() {
             <div key={m.name} className="flex items-center gap-3 text-sm">
               <span className="w-48 truncate font-mono text-xs">{m.name}</span>
               <span className="text-muted">{m.sessions} sessions</span>
-              <span className="ml-auto tabular-nums">{fmtTokens(m.tokens)} tok</span>
+              <span className="ml-auto tabular-nums text-muted">{fmtTokens(m.tokens)} tok</span>
+              <span className="w-20 text-right tabular-nums text-emerald-400">
+                {m.cost > 0 ? fmtCost(m.cost) : "—"}
+              </span>
             </div>
           ))}
         </div>

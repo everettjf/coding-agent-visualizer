@@ -78,11 +78,12 @@ function tokenUsage(t: OcMessage["tokens"]): TokenUsage | undefined {
 
 async function buildSession(
   sessionFile: string,
+  storage: string,
 ): Promise<UnifiedSession | null> {
   const meta = await readJson<OcSession>(sessionFile);
   if (!meta?.id) return null;
 
-  const msgDir = join(OPENCODE_STORAGE, "message", meta.id);
+  const msgDir = join(storage, "message", meta.id);
   const msgFiles = await listJson(msgDir);
   if (!msgFiles.length) return null;
 
@@ -107,11 +108,10 @@ async function buildSession(
     }
     if (m.modelID) model = m.providerID ? `${m.providerID}/${m.modelID}` : m.modelID;
 
+    const partDir = join(storage, "part", m.id);
     const parts = (
       await Promise.all(
-        (await listJson(join(OPENCODE_STORAGE, "part", m.id))).map((f) =>
-          readJson<any>(join(OPENCODE_STORAGE, "part", m.id, f)),
-        ),
+        (await listJson(partDir)).map((f) => readJson<any>(join(partDir, f))),
       )
     ).filter(Boolean);
 
@@ -186,8 +186,8 @@ async function buildSession(
 }
 
 // Collect every session/<proj>/ses_*.json path.
-async function sessionFiles(): Promise<string[]> {
-  const root = join(OPENCODE_STORAGE, "session");
+async function sessionFiles(storage: string): Promise<string[]> {
+  const root = join(storage, "session");
   const out: string[] = [];
   let projects;
   try {
@@ -217,26 +217,31 @@ async function signature(files: string[]): Promise<string> {
   return `${files.length}:${max}`;
 }
 
-export async function loadOpenCodeSessions(): Promise<UnifiedSession[]> {
-  const files = await sessionFiles();
+export async function loadOpenCodeSessions(
+  storage: string = OPENCODE_STORAGE,
+): Promise<UnifiedSession[]> {
+  const files = await sessionFiles(storage);
   if (!files.length) return [];
   const sig = await signature(files);
-  if (cache && cache.sig === sig) return cache.sessions;
-  const sessions = (await Promise.all(files.map(buildSession))).filter(
-    (s): s is UnifiedSession => !!s,
-  );
-  cache = { sig, sessions };
+  // Only the default storage location is cached; tests pass an explicit root.
+  const useCache = storage === OPENCODE_STORAGE;
+  if (useCache && cache && cache.sig === sig) return cache.sessions;
+  const sessions = (
+    await Promise.all(files.map((f) => buildSession(f, storage)))
+  ).filter((s): s is UnifiedSession => !!s);
+  if (useCache) cache = { sig, sessions };
   return sessions;
 }
 
 export async function getOpenCodeSession(
   id: string,
+  storage: string = OPENCODE_STORAGE,
 ): Promise<UnifiedSession | null> {
-  if (cache) {
+  if (storage === OPENCODE_STORAGE && cache) {
     const hit = cache.sessions.find((s) => s.id === id);
     if (hit) return hit;
   }
-  const files = await sessionFiles();
+  const files = await sessionFiles(storage);
   const match = files.find((f) => f.endsWith(`${id}.json`));
-  return match ? buildSession(match) : null;
+  return match ? buildSession(match, storage) : null;
 }

@@ -7,7 +7,8 @@ export type Source =
   | "codex"
   | "gemini"
   | "opencode"
-  | "cursor";
+  | "cursor"
+  | "cline";
 
 export type NodeRole =
   | "user"

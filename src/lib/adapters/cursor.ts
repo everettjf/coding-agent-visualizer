@@ -62,7 +62,7 @@ function toolFromBubble(t: any): ToolInfo {
   };
 }
 
-function buildSession(db: Database, composerId: string): UnifiedSession | null {
+export function buildSession(db: Database, composerId: string): UnifiedSession | null {
   const row = db
     .query("SELECT value FROM cursorDiskKV WHERE key = ?")
     .get(`composerData:${composerId}`) as { value: string } | null;

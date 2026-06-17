@@ -175,6 +175,13 @@ body {
   display: flex;
   gap: 10px;
 }
+.session-snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
 
 /* Badges */
 .badge {
@@ -202,6 +209,10 @@ body {
 .badge-cursor {
   background: rgba(236, 72, 153, 0.15);
   color: #f9a8d4;
+}
+.badge-cline {
+  background: rgba(20, 184, 166, 0.15);
+  color: #5eead4;
 }
 
 /* Main */
@@ -235,6 +246,19 @@ body {
   background: var(--panel-2);
   padding: 1px 5px;
   border-radius: 4px;
+}
+.empty {
+  border: 2px dashed transparent;
+  border-radius: 16px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.empty-drag {
+  border-color: var(--accent);
+  background: rgba(79, 156, 249, 0.08);
+}
+.upload-error {
+  margin-top: 14px;
+  color: #f87171;
 }
 
 /* Detail panel */

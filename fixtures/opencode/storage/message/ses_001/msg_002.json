@@ -1,0 +1,9 @@
+{
+  "id": "msg_002",
+  "role": "assistant",
+  "parentID": "msg_001",
+  "modelID": "claude-sonnet-4-6",
+  "providerID": "anthropic",
+  "time": { "created": 1750000005000 },
+  "tokens": { "input": 380, "output": 90, "cache": { "read": 200, "write": 50 } }
+}

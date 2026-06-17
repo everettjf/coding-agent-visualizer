@@ -16,3 +16,5 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun test
+      # Bundle the frontend to catch JSX/import/build regressions tests miss.
+      - run: bun run build

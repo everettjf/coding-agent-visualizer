@@ -11,6 +11,8 @@ import {
   RefreshCw,
   Download,
   TrendingUp,
+  GitCompareArrows,
+  Upload,
   Bug,
   type LucideIcon,
 } from "lucide-react";
@@ -32,6 +34,7 @@ function GithubMark({ size = 14 }: { size?: number }) {
   );
 }
 import type { SessionSummary, SessionNode, UnifiedSession, Source } from "../lib/types";
+import type { SearchHit } from "../lib/discovery";
 import { fmtTokens } from "../lib/stats";
 import { toMarkdown, toHTML, download, slugify } from "./lib/export";
 import { GraphView } from "./GraphView";
@@ -43,6 +46,7 @@ import { TranscriptView } from "./views/TranscriptView";
 import { WaterfallView } from "./views/WaterfallView";
 import { FlameView } from "./views/FlameView";
 import { AnalyticsView } from "./views/AnalyticsView";
+import { CompareView } from "./views/CompareView";
 import { SourceBadge } from "./ui";
 import { version } from "../../package.json";
 
@@ -133,6 +137,11 @@ export function App() {
   const [view, setView] = useState<ViewKey>("graph");
   const [live, setLive] = useState(true);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
+  const [searchHits, setSearchHits] = useState<SearchHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const saved = Number(localStorage.getItem("sidebarWidth"));
     return saved >= 200 && saved <= 600 ? saved : 300;
@@ -187,6 +196,35 @@ export function App() {
 
   useEffect(loadSessions, []);
 
+  // Upload / drop a transcript that isn't in the auto-discovered directories:
+  // POST its contents, get back a parsed session, and show it in place.
+  const openFile = async (file: File) => {
+    setUploadError(null);
+    try {
+      const content = await file.text();
+      const res = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: file.name, content }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "parse failed" }));
+        setUploadError(error ?? "Could not parse that file.");
+        return;
+      }
+      const s: UnifiedSession = await res.json();
+      const { nodes, ...summary } = s;
+      setShowAnalytics(false);
+      setShowCompare(false);
+      setLive(false);
+      setActiveNode(null);
+      setSelected(summary);
+      setSession(s); // in-memory; the load effect skips upload: paths
+    } catch {
+      setUploadError("Could not read that file.");
+    }
+  };
+
   // Esc closes the node detail panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -198,6 +236,8 @@ export function App() {
 
   useEffect(() => {
     if (!selected) return;
+    // Uploaded sessions are already held in memory — nothing to fetch or watch.
+    if (selected.filePath.startsWith("upload:")) return;
     setSession(null);
     setActiveNode(null);
     const path = encodeURIComponent(selected.filePath);
@@ -217,6 +257,33 @@ export function App() {
     es.onmessage = (e) => setSession(JSON.parse(e.data));
     return () => es.close();
   }, [selected, live]);
+
+  // Full-text content search: hits the server (which scans every session body)
+  // a beat after the user stops typing. Title/cwd matches stay instant + local.
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setSearchHits(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    let cancelled = false;
+    const t = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((hits: SearchHit[]) => {
+          if (cancelled) return;
+          setSearchHits(hits);
+          setSearching(false);
+        })
+        .catch(() => !cancelled && setSearching(false));
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [query]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -249,6 +316,7 @@ export function App() {
       gemini: 0,
       opencode: 0,
       cursor: 0,
+      cline: 0,
     };
     for (const s of sessions) c[s.source]++;
     return c;
@@ -260,6 +328,7 @@ export function App() {
     { source: "gemini", label: "Gemini" },
     { source: "opencode", label: "OpenCode" },
     { source: "cursor", label: "Cursor" },
+    { source: "cline", label: "Cline" },
   ];
 
   return (
@@ -300,12 +369,40 @@ export function App() {
           </div>
           <button
             className={`analytics-btn ${showAnalytics ? "analytics-on" : ""}`}
-            onClick={() => setShowAnalytics(true)}
+            onClick={() => {
+              setShowAnalytics(true);
+              setShowCompare(false);
+            }}
             title="Cross-session analytics"
           >
             <TrendingUp size={14} />
             Cross-session analytics
           </button>
+          <button
+            className={`analytics-btn ${showCompare ? "analytics-on" : ""}`}
+            onClick={() => {
+              setShowCompare(true);
+              setShowAnalytics(false);
+            }}
+            title="Compare two sessions"
+          >
+            <GitCompareArrows size={14} />
+            Compare sessions
+          </button>
+          <label className="analytics-btn" title="Open a transcript file (.jsonl / .json)">
+            <Upload size={14} />
+            Open a file…
+            <input
+              type="file"
+              accept=".jsonl,.json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void openFile(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
         </div>
         <div className="session-list">
           {loading && (
@@ -323,8 +420,37 @@ export function App() {
               ))}
             </div>
           )}
-          {!loading && !filtered.length && (
+          {!loading && !filtered.length && !searchHits?.length && (
             <div className="muted pad">No sessions found.</div>
+          )}
+          {query.trim().length >= 2 && (
+            <div className="session-group">
+              <div className="group-head">
+                Content matches
+                {searching ? " · …" : searchHits ? ` · ${searchHits.length}` : ""}
+              </div>
+              {searchHits && !searchHits.length && !searching && (
+                <div className="muted small pad">No matches in session bodies.</div>
+              )}
+              {searchHits?.map((hit) => (
+                <button
+                  key={`hit:${hit.summary.filePath}`}
+                  className={`session-item ${selected?.filePath === hit.summary.filePath && !showAnalytics && !showCompare ? "active" : ""}`}
+                  onClick={() => {
+                    setSelected(hit.summary);
+                    setShowAnalytics(false);
+                    setShowCompare(false);
+                  }}
+                >
+                  <div className="session-item-top">
+                    <SourceBadge source={hit.summary.source} />
+                    <span className="muted small">{fmtTime(hit.summary.endedAt)}</span>
+                  </div>
+                  <div className="session-title">{hit.summary.title}</div>
+                  <div className="session-snippet muted small">{hit.snippet}</div>
+                </button>
+              ))}
+            </div>
           )}
           {groups.map(([proj, items]) => (
             <div key={proj} className="session-group">
@@ -332,10 +458,11 @@ export function App() {
               {items.map((s) => (
                 <button
                   key={s.filePath}
-                  className={`session-item ${selected?.filePath === s.filePath && !showAnalytics ? "active" : ""}`}
+                  className={`session-item ${selected?.filePath === s.filePath && !showAnalytics && !showCompare ? "active" : ""}`}
                   onClick={() => {
                     setSelected(s);
                     setShowAnalytics(false);
+                    setShowCompare(false);
                   }}
                 >
                   <div className="session-item-top">
@@ -416,8 +543,43 @@ export function App() {
             </div>
           </>
         )}
-        {!showAnalytics && !selected && (
-          <div className="empty">
+        {showCompare && (
+          <>
+            <header className="main-head">
+              <div className="head-row">
+                <span className="head-title">Compare sessions</span>
+                <button
+                  className="live-toggle"
+                  onClick={() => setShowCompare(false)}
+                  title="Back to session view"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="muted small head-sub">
+                Diff two runs metric-by-metric — tokens, cost, duration and tool usage.
+              </div>
+            </header>
+            <div className="view-area">
+              <CompareView sessions={sessions} />
+            </div>
+          </>
+        )}
+        {!showAnalytics && !showCompare && !selected && (
+          <div
+            className={`empty ${dragging ? "empty-drag" : ""}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f) void openFile(f);
+            }}
+          >
             <div className="empty-logo" />
             <h2>Coding Agent Visualizer</h2>
             <p className="muted">
@@ -426,10 +588,14 @@ export function App() {
               (<code>~/.gemini/tmp</code>) transcripts and turns them into an
               interactive execution graph, timeline, file heatmap and analytics.
             </p>
-            <p className="muted small">Select a session on the left to begin.</p>
+            <p className="muted small">
+              Select a session on the left, or <strong>drop a transcript here</strong> to
+              visualize a file from anywhere.
+            </p>
+            {uploadError && <p className="upload-error small">{uploadError}</p>}
           </div>
         )}
-        {!showAnalytics && selected && (
+        {!showAnalytics && !showCompare && selected && (
           <>
             <header className="main-head">
               <div className="head-row">

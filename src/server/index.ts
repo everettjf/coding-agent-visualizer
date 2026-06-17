@@ -2,7 +2,7 @@
 // from a single process. No external services; reads only ~/.claude and ~/.codex.
 
 import { watch } from "node:fs";
-import { getAnalytics, getSession, listSessions } from "../lib/discovery";
+import { getAnalytics, getSession, listSessions, parseUploaded, searchSessions } from "../lib/discovery";
 import index from "../frontend/index.html";
 import { version } from "../../package.json";
 
@@ -20,6 +20,33 @@ const server = Bun.serve({
     // Cross-session analytics aggregated across every discovered session.
     "/api/analytics": async () => {
       return Response.json(await getAnalytics());
+    },
+
+    // Full-text search across every session body (messages, reasoning, tool I/O).
+    "/api/search": async (req) => {
+      const q = new URL(req.url).searchParams.get("q") ?? "";
+      return Response.json(await searchSessions(q));
+    },
+
+    // Parse an uploaded/dropped transcript that isn't in the discovered dirs.
+    "/api/parse": async (req) => {
+      if (req.method !== "POST") {
+        return Response.json({ error: "method not allowed" }, { status: 405 });
+      }
+      const body = (await req.json().catch(() => null)) as
+        | { name?: string; content?: string }
+        | null;
+      if (!body?.content) {
+        return Response.json({ error: "missing content" }, { status: 400 });
+      }
+      const session = parseUploaded(body.name ?? "upload", body.content);
+      if (!session) {
+        return Response.json(
+          { error: "could not parse this file as a known agent transcript" },
+          { status: 422 },
+        );
+      }
+      return Response.json(session);
     },
 
     "/api/session": async (req) => {
