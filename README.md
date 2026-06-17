@@ -72,10 +72,12 @@ Requires [Bun](https://bun.sh) (≥ 1.2).
 **Run it without cloning:**
 
 ```bash
-bunx coding-agent-visualizer   # → http://localhost:3000   (alias: bunx cav)
+bunx coding-agent-visualizer   # → http://localhost:3000
 ```
 
-Set a different port with `PORT=4000 bunx coding-agent-visualizer`.
+Set a different port with `PORT=4000 bunx coding-agent-visualizer`. After a
+global install (`bun add -g coding-agent-visualizer`) you can launch it with
+the short `cav` command.
 
 **Or clone for development:**
 
