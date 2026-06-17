@@ -69,6 +69,16 @@ machine.
 
 Requires [Bun](https://bun.sh) (≥ 1.2).
 
+**Run it without cloning:**
+
+```bash
+bunx coding-agent-visualizer   # → http://localhost:3000   (alias: bunx cav)
+```
+
+Set a different port with `PORT=4000 bunx coding-agent-visualizer`.
+
+**Or clone for development:**
+
 ```bash
 git clone https://github.com/everettjf/coding-agent-visualizer.git
 cd coding-agent-visualizer
