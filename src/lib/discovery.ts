@@ -160,15 +160,39 @@ async function listFiles(): Promise<FileRef[]> {
 }
 
 // Session files are effectively immutable once written (only the live session
-// grows), so we cache each file's parsed summary keyed by its mtime + size.
-// A rescan then re-reads only the handful of files that actually changed,
-// turning a multi-second full scan into a near-instant one.
-interface CacheEntry {
+// grows), so we cache each file's parsed artifacts keyed by its mtime + size.
+// One entry per file is shared by the session-list, analytics and search scans,
+// so an unchanged file is read and parsed at most once across all three. A
+// rescan then re-reads only the handful of files that actually changed.
+//
+// `summary` + `record` are small and always derived together when a file is
+// parsed. `text` (the flattened searchable body) is heavy, so it's built only
+// when a search needs it and is bounded separately (see evictSearchText).
+interface FileEntry {
   mtimeMs: number;
   size: number;
   summary: SessionSummary | null; // null = parsed but yielded no session
+  record: SessionRecord | null;
+  text: string | null; // search body; null until a search needs it
 }
-const summaryCache = new Map<string, CacheEntry>();
+const fileCache = new Map<string, FileEntry>();
+
+// Cap on total cached search-body text. Files are immutable, so dropping a
+// file's text just means re-parsing it the next time it's searched.
+const TEXT_BUDGET_BYTES = 64 * 1024 * 1024;
+function evictSearchText(): void {
+  let total = 0;
+  for (const e of fileCache.values()) if (e.text) total += e.text.length;
+  if (total <= TEXT_BUDGET_BYTES) return;
+  // Map iteration is insertion order → oldest first; drop their text until under budget.
+  for (const e of fileCache.values()) {
+    if (total <= TEXT_BUDGET_BYTES) break;
+    if (e.text) {
+      total -= e.text.length;
+      e.text = null;
+    }
+  }
+}
 
 // Run `fn` over `items` with at most `limit` in flight. Reading 1600+ files at
 // once spikes memory (every file's contents resident simultaneously) and thrashes
@@ -191,7 +215,11 @@ async function mapLimit<T, R>(
   return results;
 }
 
-export async function listSessions(): Promise<SessionSummary[]> {
+// The one scan every endpoint shares. Re-reads/parses only files whose
+// mtime+size changed, deriving summary + analytics record together; the heavy
+// search body is built only when `needText` is set (and reused if already
+// cached). Vanished files are pruned from the cache.
+async function scanFiles(needText: boolean): Promise<FileEntry[]> {
   const refs = await listFiles();
   const seen = new Set<string>();
 
@@ -199,28 +227,43 @@ export async function listSessions(): Promise<SessionSummary[]> {
     seen.add(filePath);
     try {
       const st = await stat(filePath);
-      const cached = summaryCache.get(filePath);
-      if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
-        return cached.summary;
+      const cached = fileCache.get(filePath);
+      const fresh = cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size;
+      // Reuse the cached entry unless a search needs text this entry lacks
+      // (a parsed-but-empty file has no body to fetch, so it's fine as-is).
+      if (fresh && (!needText || cached!.text != null || cached!.summary == null)) {
+        return cached!;
       }
       const raw = await readFile(filePath, "utf8");
       const session = parse(source, raw, filePath);
-      const summary = session ? (({ nodes, ...rest }) => rest)(session) : null;
-      summaryCache.set(filePath, { mtimeMs: st.mtimeMs, size: st.size, summary });
-      return summary;
+      const entry: FileEntry = {
+        mtimeMs: st.mtimeMs,
+        size: st.size,
+        summary: session ? (({ nodes, ...rest }) => rest)(session) : null,
+        record: session ? sessionToRecord(session) : null,
+        text: session && needText ? sessionText(session) : null,
+      };
+      fileCache.set(filePath, entry);
+      return entry;
     } catch {
       return null; // skip unreadable / vanished files
     }
   });
 
   // Drop cache entries for files that no longer exist.
-  for (const key of summaryCache.keys()) {
-    if (!seen.has(key)) summaryCache.delete(key);
+  for (const key of fileCache.keys()) {
+    if (!seen.has(key)) fileCache.delete(key);
   }
+  if (needText) evictSearchText();
 
-  const summaries = results.filter(
-    (s): s is SessionSummary => s != null,
-  );
+  return results.filter((e): e is FileEntry => e != null);
+}
+
+export async function listSessions(): Promise<SessionSummary[]> {
+  const entries = await scanFiles(false);
+  const summaries = entries
+    .map((e) => e.summary)
+    .filter((s): s is SessionSummary => s != null);
   for (const s of await loadExtraSessions()) {
     const { nodes, ...summary } = s;
     summaries.push(summary);
@@ -230,58 +273,20 @@ export async function listSessions(): Promise<SessionSummary[]> {
   return summaries;
 }
 
-// Cross-session analytics reuse the same scan-and-cache strategy as the session
-// list: a compact per-session record is cached by mtime+size so a rescan only
-// re-parses changed files.
-interface AnalyticsCacheEntry {
-  mtimeMs: number;
-  size: number;
-  record: SessionRecord | null;
-}
-const analyticsCache = new Map<string, AnalyticsCacheEntry>();
-
+// Cross-session analytics: each file's compact record was already derived by the
+// shared scan, so this just collects them (re-parsing only changed files).
 export async function getAnalytics(): Promise<Analytics> {
-  const refs = await listFiles();
-  const seen = new Set<string>();
-
-  const records = await mapLimit(refs, 12, async ({ source, filePath }) => {
-    seen.add(filePath);
-    try {
-      const st = await stat(filePath);
-      const cached = analyticsCache.get(filePath);
-      if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
-        return cached.record;
-      }
-      const raw = await readFile(filePath, "utf8");
-      const session = parse(source, raw, filePath);
-      const record = session ? sessionToRecord(session) : null;
-      analyticsCache.set(filePath, { mtimeMs: st.mtimeMs, size: st.size, record });
-      return record;
-    } catch {
-      return null;
-    }
-  });
-
-  for (const key of analyticsCache.keys()) {
-    if (!seen.has(key)) analyticsCache.delete(key);
-  }
-
-  const all = records.filter((r): r is SessionRecord => r != null);
+  const entries = await scanFiles(false);
+  const all = entries
+    .map((e) => e.record)
+    .filter((r): r is SessionRecord => r != null);
   for (const s of await loadExtraSessions()) all.push(sessionToRecord(s));
   return aggregate(all);
 }
 
-// Full-text search across every session body. Like the summary scan, the
-// flattened searchable text is cached by mtime+size so repeated queries only
+// Full-text search across every session body. Reuses the shared scan, which
+// caches the flattened searchable text by mtime+size so repeated queries only
 // re-read files that actually changed.
-interface SearchCacheEntry {
-  mtimeMs: number;
-  size: number;
-  summary: SessionSummary;
-  text: string;
-}
-const searchCache = new Map<string, SearchCacheEntry>();
-
 function scoreText(text: string, terms: string[]): { hits: number; at: number } {
   const lower = text.toLowerCase();
   let hits = 0;
@@ -336,39 +341,10 @@ export async function searchSessions(query: string): Promise<SearchHit[]> {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!terms.length) return [];
 
-  const refs = await listFiles();
-  const seen = new Set<string>();
-  const entries = await mapLimit(refs, 12, async ({ source, filePath }) => {
-    seen.add(filePath);
-    try {
-      const st = await stat(filePath);
-      const cached = searchCache.get(filePath);
-      if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
-        return cached;
-      }
-      const raw = await readFile(filePath, "utf8");
-      const session = parse(source, raw, filePath);
-      if (!session) return null;
-      const { nodes, ...summary } = session;
-      const entry: SearchCacheEntry = {
-        mtimeMs: st.mtimeMs,
-        size: st.size,
-        summary,
-        text: sessionText(session),
-      };
-      searchCache.set(filePath, entry);
-      return entry;
-    } catch {
-      return null;
-    }
-  });
-  for (const key of searchCache.keys()) {
-    if (!seen.has(key)) searchCache.delete(key);
-  }
-
-  const all: { summary: SessionSummary; text: string }[] = entries.filter(
-    (e): e is SearchCacheEntry => e != null,
-  );
+  const entries = await scanFiles(true);
+  const all: { summary: SessionSummary; text: string }[] = entries
+    .filter((e) => e.summary != null && e.text != null)
+    .map((e) => ({ summary: e.summary!, text: e.text! }));
   for (const s of await loadExtraSessions()) all.push(searchEntry(s));
 
   return rankSearch(all, query);
