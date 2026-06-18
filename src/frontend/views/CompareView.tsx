@@ -84,10 +84,13 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
   const a = useSession(aPath);
   const b = useSession(bPath);
 
+  // computeStats walks every node, so derive each session's stats once and
+  // share them across the metric table and the tool diff.
+  const sa = useMemo(() => (a ? computeStats(a) : null), [a]);
+  const sb = useMemo(() => (b ? computeStats(b) : null), [b]);
+
   const metrics = useMemo<Metric[] | null>(() => {
-    if (!a || !b) return null;
-    const sa = computeStats(a);
-    const sb = computeStats(b);
+    if (!a || !b || !sa || !sb) return null;
     return [
       { label: "Duration", a: sa.durationMs, b: sb.durationMs, fmt: fmtDuration, lowerBetter: true },
       { label: "Messages", a: sa.totals.user + sa.totals.assistant, b: sb.totals.user + sb.totals.assistant, fmt: String },
@@ -99,19 +102,17 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
       { label: "Total tokens", a: a.totalTokens, b: b.totalTokens, fmt: fmtTokens, lowerBetter: true },
       { label: "Est. cost", a: sa.costUsd, b: sb.costUsd, fmt: (n) => fmtCost(n), lowerBetter: true },
     ];
-  }, [a, b]);
+  }, [a, b, sa, sb]);
 
   const tools = useMemo(() => {
-    if (!a || !b) return null;
-    const sa = computeStats(a);
-    const sb = computeStats(b);
+    if (!sa || !sb) return null;
     const names = new Set([...sa.tools.map((t) => t.name), ...sb.tools.map((t) => t.name)]);
     const ca = new Map(sa.tools.map((t) => [t.name, t.count]));
     const cb = new Map(sb.tools.map((t) => [t.name, t.count]));
     return [...names]
       .map((name) => ({ name, a: ca.get(name) ?? 0, b: cb.get(name) ?? 0 }))
       .sort((x, y) => y.a + y.b - (x.a + x.b));
-  }, [a, b]);
+  }, [sa, sb]);
 
   return (
     <div className="h-full overflow-auto p-5">
