@@ -256,6 +256,15 @@ body {
   border-radius: 16px;
   transition: border-color 0.15s, background 0.15s;
 }
+/* Standalone online demo: no sidebar, just the main view + detail panel. */
+.app-demo {
+  display: flex;
+  height: 100vh;
+}
+.app-demo .main {
+  flex: 1;
+  min-width: 0;
+}
 .empty-drag {
   border-color: var(--accent);
   background: rgba(79, 156, 249, 0.08);

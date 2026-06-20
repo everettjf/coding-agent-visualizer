@@ -1,6 +1,7 @@
 name: Deploy GitHub Pages
 
-# Publishes the landing page in docs/ to GitHub Pages.
+# Publishes the landing page in docs/ to GitHub Pages, and builds the fully
+# client-side demo (src/frontend/demo.html) into docs/demo/ as part of deploy.
 # One-time setup: repo Settings → Pages → Source = "GitHub Actions".
 
 on:
@@ -8,6 +9,7 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - "src/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -29,6 +31,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      # Build the in-browser demo into docs/demo/ so Pages serves it alongside
+      # the landing page.
+      - run: bun run build:demo
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
