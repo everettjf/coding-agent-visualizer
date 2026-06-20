@@ -63,7 +63,9 @@ machine.
 | 📂 **Open any file** | Drag-and-drop (or pick) a transcript from anywhere; the source is auto-detected and rendered through every view. |
 | 🔍 **Graph search & filters** | Highlight matching nodes; toggle roles (hide reasoning/tools), flip layout horizontal/vertical. |
 | 🧩 **Diff & inspect** | Click any node for full message / reasoning / tool I/O, with syntax-highlighted diffs for `Edit`/`Write` and one-click copy. |
-| 🗂️ **Multi-source** | **Claude Code**, **Codex**, **Gemini CLI**, **OpenCode**, **Cursor** and **Cline** today; a new agent is just one pluggable adapter away. |
+| 🗂️ **Multi-source** | **Claude Code**, **Codex**, **Gemini CLI**, **Qwen Code**, **OpenCode**, **Cursor** and **Cline** today; a new agent is just one pluggable adapter away. |
+| 📝 **Annotations** | Flag any turn and jot a private note (stored locally); export flagged turns as a Markdown review document. |
+| 🌐 **Online demo** | A fully client-side [demo](https://everettjf.github.io/coding-agent-visualizer/demo/demo.html) — drop a transcript and explore it in the browser, nothing uploaded. |
 | 🔴 **Live tail** | Toggle **LIVE** to stream a session into the graph as the agent writes to disk — watch it think in real time. |
 | 📈 **Cross-session analytics** | Aggregate every local session: token & cost over time, tool-usage trends, and per-source / per-model / per-project breakdowns. |
 | 🧬 **Collapsible sub-agents** | Fold a whole sub-agent (sidechain) branch into its entry node — collapse one or all at once to focus the graph. |
@@ -115,6 +117,7 @@ The app auto-discovers sessions from:
 - **Claude Code** — `~/.claude/projects/<encoded-cwd>/*.jsonl`
 - **Codex** — `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
 - **Gemini CLI** — `~/.gemini/tmp/<project-hash>/checkpoint-*.json`
+- **Qwen Code** — `~/.qwen/tmp/<project-hash>/checkpoint-*.json` (Gemini-compatible fork)
 - **OpenCode** — `~/.local/share/opencode/storage/{session,message,part}/…`
 - **Cursor** — the IDE's `state.vscdb` SQLite (composer chats)
 - **Cline** — VS Code globalStorage `…/saoudrizwan.claude-dev/tasks/<id>/`
@@ -139,20 +142,25 @@ src/
 │  └─ adapters/
 │     ├─ claudeCode.ts    # uuid/parentUuid tree → nodes; tool calls; tokens
 │     ├─ codex.ts         # rollout response_items → nodes
-│     ├─ gemini.ts        # Gemini Content[] (checkpoints) → nodes
+│     ├─ gemini.ts        # Gemini Content[] (checkpoints) → nodes; also Qwen Code (fork)
 │     ├─ opencode.ts      # session/message/part JSON files → nodes
 │     ├─ cursor.ts        # state.vscdb SQLite composer chats → nodes
 │     └─ cline.ts         # Cline task JSON (Anthropic messages + UI events) → nodes
+│  ├─ pricing.ts          # model → published USD rates; token breakdown → cost
+│  ├─ search.ts           # inverted index (prefix + TF ranking) for full-text search
+│  └─ parseUpload.ts      # browser-safe "detect + parse a dropped transcript"
 ├─ cli.ts                 # `bunx coding-agent-visualizer` launcher
 ├─ server/index.ts        # Bun.serve: UI + /api/sessions, /api/session, /api/analytics, /api/search, /api/parse
 └─ frontend/
    ├─ App.tsx             # sidebar, search, Radix tabs, export menu, panel orchestration
+   ├─ demo.tsx            # standalone client-side online demo (GitHub Pages)
    ├─ GraphView.tsx       # React Flow + dagre graph, collapsible sub-agents
-   ├─ DetailPanel.tsx     # node inspector (message / reasoning / tool / diff)
+   ├─ DetailPanel.tsx     # node inspector (message / reasoning / tool / diff / notes)
    ├─ ui.tsx              # role/tool/source colors + lucide icon mapping
    ├─ lib/
    │  ├─ charts.ts        # Chart.js registration + dark-theme defaults
    │  ├─ highlight.tsx    # tiny dependency-free syntax highlighter for diffs
+   │  ├─ annotations.ts   # local per-node flags + notes (localStorage) + export
    │  ├─ export.ts        # session → Markdown / self-contained HTML
    │  └─ utils.ts         # cn() Tailwind class merge helper
    └─ views/              # Waterfall / Flame / Timeline / Files / Stats / Transcript / Analytics / Compare
