@@ -12,6 +12,7 @@ const SOURCE_COLOR: Record<string, string> = {
   opencode: "#f59e0b",
   cursor: "#ec4899",
   cline: "#14b8a6",
+  qwen: "#8b5cf6",
 };
 
 function Card({ label, value, accent }: { label: string; value: string | number; accent: string }) {

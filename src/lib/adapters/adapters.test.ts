@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseClaudeCodeSession } from "./claudeCode";
 import { parseCodexSession } from "./codex";
-import { parseGeminiSession } from "./gemini";
+import { parseGeminiSession, parseQwenSession } from "./gemini";
 import { buildClineSession } from "./cline";
 import { computeStats } from "../stats";
 
@@ -137,6 +137,32 @@ describe("Gemini adapter", () => {
     const s = parseGeminiSession(bare, "bare.json")!;
     expect(s.title).toBe("hi there");
     expect(s.nodes.map((n) => n.role)).toEqual(["user", "assistant"]);
+  });
+});
+
+describe("Qwen Code adapter", () => {
+  const session = parseQwenSession(read("qwen-sample.json"), "q.json")!;
+
+  test("reuses the Gemini format under the qwen source label", () => {
+    expect(session.source).toBe("qwen");
+    expect(session.model).toBe("qwen3-coder-plus");
+    expect(session.title).toBe("Add a hello function to utils.ts");
+    expect(session.cwd).toBe("/home/user/demo-project");
+    // node ids are namespaced by source, not hardcoded to gemini:
+    expect(session.nodes.every((n) => n.id.startsWith("qwen:"))).toBe(true);
+    expect(session.nodes.every((n) => n.source === "qwen")).toBe(true);
+  });
+
+  test("maps roles, pairs tool results and sums tokens", () => {
+    const roles = session.nodes.map((n) => n.role);
+    expect(roles).toContain("user");
+    expect(roles).toContain("assistant");
+    expect(roles).toContain("reasoning");
+    expect(roles).toContain("tool");
+    const replace = session.nodes.find((n) => n.tool?.name === "replace")!;
+    expect(replace.tool!.result).toContain("File updated successfully.");
+    expect(replace.tool!.files).toEqual(["/home/user/demo-project/utils.ts"]);
+    expect(session.totalTokens).toBe(300 + 50 + 360 + 80 + 400 + 40);
   });
 });
 

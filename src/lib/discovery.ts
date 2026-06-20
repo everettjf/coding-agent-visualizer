@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseClaudeCodeSession } from "./adapters/claudeCode";
 import { parseCodexSession } from "./adapters/codex";
-import { parseGeminiSession } from "./adapters/gemini";
+import { parseGeminiSession, parseQwenSession } from "./adapters/gemini";
 import { loadOpenCodeSessions, getOpenCodeSession } from "./adapters/opencode";
 import { loadCursorSessions, getCursorSession } from "./adapters/cursor";
 import { loadClineSessions, getClineSession } from "./adapters/cline";
@@ -61,6 +61,8 @@ async function loadExtraSessions(): Promise<UnifiedSession[]> {
 const CLAUDE_DIR = join(homedir(), ".claude", "projects");
 const CODEX_DIR = join(homedir(), ".codex", "sessions");
 const GEMINI_DIR = join(homedir(), ".gemini", "tmp");
+// Qwen Code is a Gemini CLI fork with the identical on-disk format.
+const QWEN_DIR = join(homedir(), ".qwen", "tmp");
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -110,6 +112,8 @@ function parse(
       return parseCodexSession(raw, filePath);
     case "gemini":
       return parseGeminiSession(raw, filePath);
+    case "qwen":
+      return parseQwenSession(raw, filePath);
     default:
       return null; // opencode / cursor are not file-based (handled separately)
   }
@@ -118,7 +122,7 @@ function parse(
 // Parse an uploaded/dropped file whose source is unknown: try every file-based
 // adapter and keep whichever produced the richest session. Lets users drop a
 // transcript that isn't in the auto-discovered locations.
-const FILE_SOURCES: Source[] = ["claude-code", "codex", "gemini"];
+const FILE_SOURCES: Source[] = ["claude-code", "codex", "gemini", "qwen"];
 export function parseUploaded(name: string, raw: string): UnifiedSession | null {
   const filePath = `upload:${name}`;
   let best: UnifiedSession | null = null;
@@ -155,6 +159,10 @@ async function listFiles(): Promise<FileRef[]> {
   if (await exists(GEMINI_DIR)) {
     for (const f of await walk(GEMINI_DIR, isGeminiSession))
       refs.push({ source: "gemini", filePath: f });
+  }
+  if (await exists(QWEN_DIR)) {
+    for (const f of await walk(QWEN_DIR, isGeminiSession))
+      refs.push({ source: "qwen", filePath: f });
   }
   return refs;
 }
@@ -364,7 +372,9 @@ export async function getSession(
     ? "codex"
     : filePath.includes(`${join(".gemini", "tmp")}`)
       ? "gemini"
-      : "claude-code";
+      : filePath.includes(`${join(".qwen", "tmp")}`)
+        ? "qwen"
+        : "claude-code";
   try {
     const raw = await readFile(filePath, "utf8");
     return parse(source, raw, filePath);

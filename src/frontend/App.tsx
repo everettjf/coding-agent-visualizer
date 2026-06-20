@@ -317,6 +317,7 @@ export function App() {
       opencode: 0,
       cursor: 0,
       cline: 0,
+      qwen: 0,
     };
     for (const s of sessions) c[s.source]++;
     return c;
@@ -329,6 +330,7 @@ export function App() {
     { source: "opencode", label: "OpenCode" },
     { source: "cursor", label: "Cursor" },
     { source: "cline", label: "Cline" },
+    { source: "qwen", label: "Qwen" },
   ];
 
   return (

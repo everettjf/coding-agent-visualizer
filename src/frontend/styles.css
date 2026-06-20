@@ -214,6 +214,10 @@ body {
   background: rgba(20, 184, 166, 0.15);
   color: #5eead4;
 }
+.badge-qwen {
+  background: rgba(139, 92, 246, 0.15);
+  color: #c4b5fd;
+}
 
 /* Main */
 .main {
