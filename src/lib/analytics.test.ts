@@ -6,6 +6,8 @@ const rec = (over: Partial<SessionRecord>): SessionRecord => ({
   source: "claude-code",
   model: "claude-opus-4-8",
   project: "demo",
+  title: "untitled",
+  filePath: "f",
   date: "2026-01-01",
   tokens: 100,
   inputTokens: 60,
@@ -14,6 +16,7 @@ const rec = (over: Partial<SessionRecord>): SessionRecord => ({
   cost: 0,
   toolCalls: 1,
   tools: { Read: 1 },
+  toolErrors: {},
   ...over,
 });
 
@@ -52,6 +55,19 @@ describe("aggregate", () => {
     const src = Object.fromEntries(a.bySource.map((s) => [s.name, s.tokens]));
     expect(src).toEqual({ "claude-code": 100, codex: 50, gemini: 200 });
     expect(a.byModel.find((m) => m.name === "gemini-2.5-pro")?.tokens).toBe(200);
+  });
+
+  test("ranks the priciest sessions and per-tool reliability", () => {
+    const r = aggregate([
+      rec({ title: "cheap", filePath: "x", cost: 0.5, tokens: 100, tools: { Bash: 4 }, toolErrors: { Bash: 1 } }),
+      rec({ title: "pricey", filePath: "y", cost: 9, tokens: 500, tools: { Bash: 2 }, toolErrors: {} }),
+    ]);
+    expect(r.topSessions[0].title).toBe("pricey");
+    expect(r.topSessions[0].cost).toBe(9);
+    const bash = r.toolReliability.find((t) => t.name === "Bash")!;
+    expect(bash.count).toBe(6); // 4 + 2
+    expect(bash.errors).toBe(1);
+    expect(bash.rate).toBeCloseTo(1 / 6, 10);
   });
 
   test("ranks projects by tokens and tools by count", () => {

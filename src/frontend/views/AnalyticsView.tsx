@@ -4,6 +4,7 @@ import "../lib/charts";
 import type { Analytics } from "../../lib/analytics";
 import { fmtTokens } from "../../lib/stats";
 import { fmtCost } from "../../lib/pricing";
+import { SourceBadge } from "../ui";
 
 const SOURCE_COLOR: Record<string, string> = {
   "claude-code": "#22c55e",
@@ -263,6 +264,48 @@ export function AnalyticsView() {
           />
         </div>
       </section>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section className="rounded-xl border border-border bg-panel p-4">
+          <h3 className="mb-3 text-sm font-semibold">Most expensive sessions</h3>
+          {data.topSessions.length === 0 ? (
+            <div className="text-muted">No priced sessions.</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {data.topSessions.map((s) => (
+                <div key={s.filePath} className="flex items-center gap-3 text-sm">
+                  <SourceBadge source={s.source as any} />
+                  <span className="truncate">{s.title}</span>
+                  <span className="ml-auto tabular-nums text-muted">{fmtTokens(s.tokens)} tok</span>
+                  <span className="w-20 text-right tabular-nums text-emerald-400">
+                    {s.cost > 0 ? fmtCost(s.cost) : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-border bg-panel p-4">
+          <h3 className="mb-3 text-sm font-semibold">Tool reliability</h3>
+          {data.toolReliability.length === 0 ? (
+            <div className="text-muted">No tool errors recorded. 🎉</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {data.toolReliability.map((t) => (
+                <div key={t.name} className="flex items-center gap-3 text-sm">
+                  <span className="w-40 truncate font-mono text-xs">{t.name}</span>
+                  <span className="text-muted">{t.count} calls</span>
+                  <span className="ml-auto tabular-nums text-rose-400">{t.errors} err</span>
+                  <span className="w-16 text-right tabular-nums text-muted">
+                    {(t.rate * 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
 
       <section className="mt-4 rounded-xl border border-border bg-panel p-4">
         <h3 className="mb-3 text-sm font-semibold">By model</h3>
