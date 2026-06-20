@@ -37,6 +37,13 @@ import type { SessionSummary, SessionNode, UnifiedSession, Source } from "../lib
 import type { SearchHit } from "../lib/discovery";
 import { fmtTokens } from "../lib/stats";
 import { toMarkdown, toHTML, download, slugify } from "./lib/export";
+import {
+  loadAnnotations,
+  saveAnnotation,
+  annotationCount,
+  annotationsToMarkdown,
+  type SessionAnnotations,
+} from "./lib/annotations";
 import { GraphView } from "./GraphView";
 import { DetailPanel } from "./DetailPanel";
 import { StatsView } from "./views/StatsView";
@@ -69,7 +76,13 @@ const VIEWS: { key: ViewKey; label: string; icon: LucideIcon }[] = [
 ];
 
 // Export the loaded session to Markdown or a self-contained HTML file.
-function ExportMenu({ session }: { session: UnifiedSession }) {
+function ExportMenu({
+  session,
+  annotations,
+}: {
+  session: UnifiedSession;
+  annotations: SessionAnnotations;
+}) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
@@ -78,10 +91,11 @@ function ExportMenu({ session }: { session: UnifiedSession }) {
     return () => window.removeEventListener("click", close);
   }, [open]);
 
-  const doExport = (kind: "md" | "html") => {
+  const doExport = (kind: "md" | "html" | "notes") => {
     const base = slugify(session.title);
     if (kind === "md") download(`${base}.md`, toMarkdown(session), "text/markdown");
-    else download(`${base}.html`, toHTML(session), "text/html");
+    else if (kind === "html") download(`${base}.html`, toHTML(session), "text/html");
+    else download(`${base}-notes.md`, annotationsToMarkdown(session, annotations), "text/markdown");
     setOpen(false);
   };
 
@@ -109,6 +123,14 @@ function ExportMenu({ session }: { session: UnifiedSession }) {
           >
             Shareable HTML <span className="text-muted">(.html)</span>
           </button>
+          {annotationCount(annotations) > 0 && (
+            <button
+              className="block w-full border-t border-border px-3 py-2 text-left hover:bg-white/5"
+              onClick={() => doExport("notes")}
+            >
+              Notes <span className="text-muted">({annotationCount(annotations)})</span>
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -142,6 +164,7 @@ export function App() {
   const [searching, setSearching] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [annotations, setAnnotations] = useState<SessionAnnotations>({});
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const saved = Number(localStorage.getItem("sidebarWidth"));
     return saved >= 200 && saved <= 600 ? saved : 300;
@@ -223,6 +246,16 @@ export function App() {
     } catch {
       setUploadError("Could not read that file.");
     }
+  };
+
+  // Load this session's saved annotations (flags + notes) from localStorage.
+  useEffect(() => {
+    setAnnotations(session ? loadAnnotations(session.id) : {});
+  }, [session?.id]);
+
+  const annotate = (nodeId: string, a: { flagged?: boolean; note?: string }) => {
+    if (!session) return;
+    setAnnotations(saveAnnotation(session.id, nodeId, a));
   };
 
   // Esc closes the node detail panel.
@@ -611,7 +644,7 @@ export function App() {
                   <span className="live-dot" />
                   {live ? "LIVE" : "PAUSED"}
                 </button>
-                {session && <ExportMenu session={session} />}
+                {session && <ExportMenu session={session} annotations={annotations} />}
               </div>
               <div className="muted small head-sub">
                 {selected.model} · {selected.cwd}
@@ -681,6 +714,8 @@ export function App() {
           onClose={() => setActiveNode(null)}
           width={detailWidth}
           onResizeStart={startDetailResize}
+          annotation={annotations[activeNode.id]}
+          onAnnotate={(a) => annotate(activeNode.id, a)}
         />
       )}
     </div>

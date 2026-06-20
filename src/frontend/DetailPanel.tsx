@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { Flag } from "lucide-react";
 import type { SessionNode } from "../lib/types";
 import { roleColor, roleLabel } from "./ui";
 import { highlight, langForFile, type Lang } from "./lib/highlight";
+import type { NodeAnnotation } from "./lib/annotations";
 
 function pretty(value: unknown): string {
   if (value == null) return "";
@@ -86,11 +88,15 @@ export function DetailPanel({
   onClose,
   width,
   onResizeStart,
+  annotation,
+  onAnnotate,
 }: {
   node: SessionNode;
   onClose: () => void;
   width: number;
   onResizeStart: (e: React.MouseEvent) => void;
+  annotation?: NodeAnnotation;
+  onAnnotate?: (a: NodeAnnotation) => void;
 }) {
   const color = roleColor(node.role);
   const isFileEdit =
@@ -112,6 +118,28 @@ export function DetailPanel({
         <button className="close" onClick={onClose}>×</button>
       </div>
       <div className="detail-body">
+        {onAnnotate && (
+          <section className="annot">
+            <div className="sec-head">
+              <h4>Notes</h4>
+              <button
+                className={`flag-btn ${annotation?.flagged ? "flag-on" : ""}`}
+                onClick={() => onAnnotate({ ...annotation, flagged: !annotation?.flagged })}
+                title={annotation?.flagged ? "Unflag this turn" : "Flag this turn"}
+              >
+                <Flag size={12} />
+                {annotation?.flagged ? "Flagged" : "Flag"}
+              </button>
+            </div>
+            <textarea
+              className="annot-note"
+              placeholder="Add a private note about this turn…"
+              value={annotation?.note ?? ""}
+              onChange={(e) => onAnnotate({ ...annotation, note: e.target.value })}
+            />
+          </section>
+        )}
+
         {node.timestamp && (
           <div className="muted small detail-ts">
             {new Date(node.timestamp).toLocaleString()}
