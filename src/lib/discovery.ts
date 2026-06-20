@@ -10,15 +10,10 @@ import { loadOpenCodeSessions, getOpenCodeSession } from "./adapters/opencode";
 import { loadCursorSessions, getCursorSession } from "./adapters/cursor";
 import { loadClineSessions, getClineSession } from "./adapters/cline";
 import { aggregate, sessionToRecord, type Analytics, type SessionRecord } from "./analytics";
+import { buildIndex, type SearchDoc, type SearchHit, type SearchIndex } from "./search";
 import type { Source, SessionSummary, UnifiedSession } from "./types";
 
-export interface SearchHit {
-  summary: SessionSummary;
-  /** Number of matched terms found in the session body. */
-  hits: number;
-  /** A short excerpt of the body around the first match (original case). */
-  snippet: string;
-}
+export type { SearchHit } from "./search";
 
 // Flatten a session's bodies (message text, reasoning, tool names + I/O) into one
 // searchable string. Capped so a pathologically large session can't blow up memory.
@@ -184,6 +179,8 @@ interface FileEntry {
   text: string | null; // search body; null until a search needs it
 }
 const fileCache = new Map<string, FileEntry>();
+// Bumped whenever the cache mutates, so the search index knows when to rebuild.
+let cacheVersion = 0;
 
 // Cap on total cached search-body text. Files are immutable, so dropping a
 // file's text just means re-parsing it the next time it's searched.
@@ -252,6 +249,7 @@ async function scanFiles(needText: boolean): Promise<FileEntry[]> {
         text: session && needText ? sessionText(session) : null,
       };
       fileCache.set(filePath, entry);
+      cacheVersion++; // a file was (re)parsed → search index is stale
       return entry;
     } catch {
       return null; // skip unreadable / vanished files
@@ -260,7 +258,10 @@ async function scanFiles(needText: boolean): Promise<FileEntry[]> {
 
   // Drop cache entries for files that no longer exist.
   for (const key of fileCache.keys()) {
-    if (!seen.has(key)) fileCache.delete(key);
+    if (!seen.has(key)) {
+      fileCache.delete(key);
+      cacheVersion++;
+    }
   }
   if (needText) evictSearchText();
 
@@ -292,70 +293,34 @@ export async function getAnalytics(): Promise<Analytics> {
   return aggregate(all);
 }
 
-// Full-text search across every session body. Reuses the shared scan, which
-// caches the flattened searchable text by mtime+size so repeated queries only
-// re-read files that actually changed.
-function scoreText(text: string, terms: string[]): { hits: number; at: number } {
-  const lower = text.toLowerCase();
-  let hits = 0;
-  let at = -1;
-  for (const term of terms) {
-    const idx = lower.indexOf(term);
-    if (idx === -1) return { hits: 0, at: -1 }; // AND: every term must appear
-    hits++;
-    if (at === -1 || idx < at) at = idx;
-  }
-  return { hits, at };
-}
-
-function snippetAround(text: string, at: number, span = 120): string {
-  const start = Math.max(0, at - span / 3);
-  const raw = text.slice(start, start + span).replace(/\s+/g, " ").trim();
-  return (start > 0 ? "…" : "") + raw + (start + span < text.length ? "…" : "");
-}
-
-/** Pure search core: rank pre-flattened {summary, text} entries against terms. */
-export function rankSearch(
-  entries: { summary: SessionSummary; text: string }[],
-  query: string,
-): SearchHit[] {
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!terms.length) return [];
-  const results: SearchHit[] = [];
-  for (const e of entries) {
-    const { hits, at } = scoreText(e.text, terms);
-    if (hits > 0) {
-      results.push({ summary: e.summary, hits, snippet: snippetAround(e.text, at) });
-    }
-  }
-  results.sort(
-    (a, b) =>
-      b.hits - a.hits ||
-      (b.summary.endedAt ?? "").localeCompare(a.summary.endedAt ?? ""),
-  );
-  return results.slice(0, 50);
-}
-
-/** Flatten a session into the {summary, text} entry the search core consumes. */
-export function searchEntry(session: UnifiedSession): {
-  summary: SessionSummary;
-  text: string;
-} {
+/** Flatten a session into the {summary, text} doc the search index consumes. */
+export function searchEntry(session: UnifiedSession): SearchDoc {
   const { nodes, ...summary } = session;
   return { summary, text: sessionText(session) };
 }
 
+// Full-text search across every session body via an inverted index. The index
+// is memoized: it's rebuilt only when the underlying corpus changes (file cache
+// version bump, or a different number of non-file sessions), so typing a query
+// reuses one index instead of re-scanning every body per keystroke.
+let searchIndexCache: { sig: string; index: SearchIndex } | null = null;
+
 export async function searchSessions(query: string): Promise<SearchHit[]> {
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!terms.length) return [];
+  if (!query.trim()) return [];
 
   const entries = await scanFiles(true);
-  const all: { summary: SessionSummary; text: string }[] = entries
-    .filter((e) => e.summary != null && e.text != null)
-    .map((e) => ({ summary: e.summary!, text: e.text! }));
-  for (const s of await loadExtraSessions()) all.push(searchEntry(s));
+  const extras = await loadExtraSessions();
+  const sig = `${cacheVersion}:${extras.length}`;
 
-  return rankSearch(all, query);
+  if (!searchIndexCache || searchIndexCache.sig !== sig) {
+    const docs: SearchDoc[] = entries
+      .filter((e) => e.summary != null && e.text != null)
+      .map((e) => ({ summary: e.summary!, text: e.text! }));
+    for (const s of extras) docs.push(searchEntry(s));
+    searchIndexCache = { sig, index: buildIndex(docs) };
+  }
+
+  return searchIndexCache.index.search(query);
 }
 
 export async function getSession(
