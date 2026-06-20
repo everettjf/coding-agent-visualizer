@@ -31,6 +31,16 @@ describe("aggregate", () => {
     expect(a.totalToolCalls).toBe(8);
   });
 
+  test("rolls up by month and computes burn rate", () => {
+    expect(a.monthly.map((m) => m.date)).toEqual(["2026-01"]);
+    expect(a.monthly[0].tokens).toBe(350); // 100 + 50 + 200
+    expect(a.monthly[0].sessions).toBe(3);
+    // 2 active days → per-active-day = totalCost / 2
+    expect(a.burn.perActiveDay).toBeCloseTo(a.totalCost / 2, 10);
+    // both active days fall within the last 30 (and 7) days of the latest day
+    expect(a.burn.last30).toBeCloseTo(a.totalCost, 10);
+  });
+
   test("buckets tokens by day, sorted ascending", () => {
     expect(a.daily.map((d) => d.date)).toEqual(["2026-01-01", "2026-01-02"]);
     expect(a.daily[0].tokens).toBe(150);

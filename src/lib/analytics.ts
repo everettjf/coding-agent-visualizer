@@ -46,6 +46,10 @@ export interface Analytics {
   topProjects: NamedCountTokens[];
   topTools: { name: string; count: number }[];
   daily: DailyPoint[];
+  /** Per-calendar-month rollup (date = "YYYY-MM"). */
+  monthly: DailyPoint[];
+  /** Spend rate: average per active day and recent windows up to the latest day. */
+  burn: { perActiveDay: number; last7: number; last30: number };
 }
 
 function projectName(cwd: string): string {
@@ -89,6 +93,7 @@ export function aggregate(records: SessionRecord[]): Analytics {
   const byModel = new Map<string, CountTokens>();
   const byProject = new Map<string, CountTokens>();
   const byDay = new Map<string, CountTokens>();
+  const byMonth = new Map<string, CountTokens>();
   const toolCounts = new Map<string, number>();
 
   let totalTokens = 0;
@@ -115,7 +120,10 @@ export function aggregate(records: SessionRecord[]): Analytics {
     bump(bySource, r.source, r.tokens, r.cost);
     bump(byModel, r.model, r.tokens, r.cost);
     bump(byProject, r.project, r.tokens, r.cost);
-    if (r.date) bump(byDay, r.date, r.tokens, r.cost);
+    if (r.date) {
+      bump(byDay, r.date, r.tokens, r.cost);
+      bump(byMonth, r.date.slice(0, 7), r.tokens, r.cost);
+    }
     for (const [name, count] of Object.entries(r.tools)) {
       toolCounts.set(name, (toolCounts.get(name) ?? 0) + count);
     }
@@ -124,6 +132,29 @@ export function aggregate(records: SessionRecord[]): Analytics {
   const daily: DailyPoint[] = [...byDay.entries()]
     .map(([date, v]) => ({ date, ...v }))
     .sort((a, b) => a.date.localeCompare(b.date));
+
+  const monthly: DailyPoint[] = [...byMonth.entries()]
+    .map(([date, v]) => ({ date, ...v }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Spend rate, anchored to the most recent active day so it stays meaningful
+  // even when the data isn't from "today".
+  const burn = { perActiveDay: 0, last7: 0, last30: 0 };
+  if (daily.length) {
+    burn.perActiveDay = totalCost / daily.length;
+    const latest = daily[daily.length - 1].date;
+    const cutoff = (n: number) => {
+      const d = new Date(`${latest}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() - (n - 1));
+      return d.toISOString().slice(0, 10);
+    };
+    const c7 = cutoff(7);
+    const c30 = cutoff(30);
+    for (const d of daily) {
+      if (d.date >= c7) burn.last7 += d.cost;
+      if (d.date >= c30) burn.last30 += d.cost;
+    }
+  }
 
   const topTools = [...toolCounts.entries()]
     .map(([name, count]) => ({ name, count }))
@@ -140,5 +171,7 @@ export function aggregate(records: SessionRecord[]): Analytics {
     topProjects: topNamed(byProject, 12),
     topTools,
     daily,
+    monthly,
+    burn,
   };
 }
