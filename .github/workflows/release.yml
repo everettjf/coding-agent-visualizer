@@ -1,0 +1,42 @@
+name: Release binaries
+
+# Build standalone, no-dependency executables (the whole app + Bun runtime in
+# one file) for every platform and attach them to the GitHub Release, so users
+# can run the visualizer without installing Bun. Triggered by pushing a v* tag.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: bun-linux-x64
+            name: coding-agent-visualizer-linux-x64
+          - target: bun-linux-arm64
+            name: coding-agent-visualizer-linux-arm64
+          - target: bun-darwin-x64
+            name: coding-agent-visualizer-darwin-x64
+          - target: bun-darwin-arm64
+            name: coding-agent-visualizer-darwin-arm64
+          - target: bun-windows-x64
+            name: coding-agent-visualizer-windows-x64.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      # Bun cross-compiles to any target from one host; Tailwind/HTML bundling
+      # runs at build time so the CSS is baked into the executable.
+      - run: bun build --compile --minify --target ${{ matrix.target }} --outfile ${{ matrix.name }} src/server/index.ts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.name }}

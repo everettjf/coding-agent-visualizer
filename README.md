@@ -91,6 +91,16 @@ Set a different port with `PORT=4000 bunx coding-agent-visualizer@latest`. After
 global install (`bun add -g coding-agent-visualizer@latest`) you can launch it with
 the short `cav` command.
 
+**Or grab a standalone binary (no Bun needed):**
+
+Download the executable for your platform from the
+[latest release](https://github.com/everettjf/coding-agent-visualizer/releases/latest)
+and run it — the whole app and the Bun runtime are bundled into one file:
+
+```bash
+./coding-agent-visualizer-darwin-arm64   # → http://localhost:19876
+```
+
 **Or clone for development:**
 
 ```bash
@@ -187,6 +197,7 @@ SessionNode {
 | `bun dev` | Dev server with hot reload |
 | `bun start` | Production server |
 | `bun run build` | Bundle the frontend to `dist/` (also a CI build check) |
+| `bun run compile` | Build a standalone single-file executable (no Bun needed to run) |
 | `bun test` | Adapter + library unit tests (runs against `fixtures/`) |
 | `bun run typecheck` | TypeScript check (`tsc --noEmit`) |
 | `bun scripts/shot.ts` | Headless smoke test — opens every tab, reports runtime errors |

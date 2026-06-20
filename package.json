@@ -36,6 +36,7 @@
     "dev": "bun --hot src/server/index.ts",
     "start": "bun src/server/index.ts",
     "build": "bun build src/frontend/index.html --outdir dist",
+    "compile": "bun build --compile --minify --outfile dist/coding-agent-visualizer src/server/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
