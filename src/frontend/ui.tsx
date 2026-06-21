@@ -92,6 +92,7 @@ const SOURCE_META: Record<Source, { icon: LucideIcon; label: string }> = {
   opencode: { icon: SquareTerminal, label: "OpenCode" },
   cursor: { icon: MousePointerClick, label: "Cursor" },
   cline: { icon: BotIcon, label: "Cline" },
+  qwen: { icon: Gem, label: "Qwen" },
 };
 
 export function SourceBadge({ source }: { source: Source }) {

@@ -1,0 +1,80 @@
+{
+  "sessionId": "qwen-demo-001",
+  "model": "qwen3-coder-plus",
+  "cwd": "/home/user/demo-project",
+  "history": [
+    {
+      "role": "user",
+      "parts": [{ "text": "Add a hello function to utils.ts" }]
+    },
+    {
+      "role": "model",
+      "usageMetadata": {
+        "promptTokenCount": 300,
+        "candidatesTokenCount": 50,
+        "cachedContentTokenCount": 0
+      },
+      "parts": [
+        { "thought": true, "text": "Let me read utils.ts before editing it." },
+        {
+          "functionCall": {
+            "name": "read_file",
+            "args": { "absolute_path": "/home/user/demo-project/utils.ts" }
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "functionResponse": {
+            "name": "read_file",
+            "response": { "output": "export const x = 1;\n" }
+          }
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "usageMetadata": {
+        "promptTokenCount": 360,
+        "candidatesTokenCount": 80,
+        "cachedContentTokenCount": 128
+      },
+      "parts": [
+        { "text": "I'll add a hello function." },
+        {
+          "functionCall": {
+            "name": "replace",
+            "args": {
+              "file_path": "/home/user/demo-project/utils.ts",
+              "old_string": "export const x = 1;",
+              "new_string": "export const x = 1;\nexport function hello() {\n  return \"hello\";\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "functionResponse": {
+            "name": "replace",
+            "response": { "output": "File updated successfully." }
+          }
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "usageMetadata": {
+        "promptTokenCount": 400,
+        "candidatesTokenCount": 40,
+        "cachedContentTokenCount": 128
+      },
+      "parts": [{ "text": "Done! Added a hello() function to utils.ts." }]
+    }
+  ]
+}

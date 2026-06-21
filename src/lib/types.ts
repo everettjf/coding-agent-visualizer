@@ -8,7 +8,8 @@ export type Source =
   | "gemini"
   | "opencode"
   | "cursor"
-  | "cline";
+  | "cline"
+  | "qwen";
 
 export type NodeRole =
   | "user"

@@ -1,7 +1,9 @@
-// Adapter: Gemini CLI session logs.
+// Adapter: Gemini CLI session logs (and Gemini-compatible forks like Qwen Code).
 // Gemini CLI stores its conversation history as Gemini API `Content` objects
 // (the @google/genai shape) under ~/.gemini/tmp/<project-hash>/ — saved chat
-// checkpoints (`checkpoint-*.json`) and recorded sessions.
+// checkpoints (`checkpoint-*.json`) and recorded sessions. Qwen Code is a fork
+// that uses the identical format under ~/.qwen/tmp/<project-hash>/, so the same
+// parser serves both — only the `source` label differs.
 //
 // A Content is { role: "user" | "model", parts: Part[] } where a Part is one of:
 //   { text }                              — message / (when thought:true) reasoning
@@ -16,12 +18,15 @@
 import type {
   SessionNode,
   SessionSummary,
+  Source,
   TokenUsage,
   ToolInfo,
   UnifiedSession,
 } from "../types";
 
-const SOURCE = "gemini" as const;
+/** Sources that share the Gemini `Content[]` on-disk format. */
+export type GeminiLikeSource = "gemini" | "qwen";
+const LABELS: Record<GeminiLikeSource, string> = { gemini: "Gemini", qwen: "Qwen" };
 
 interface Part {
   text?: string;
@@ -123,9 +128,11 @@ function parseRaw(raw: string): Parsed | null {
 export function parseGeminiSession(
   raw: string,
   filePath: string,
+  source: GeminiLikeSource = "gemini",
 ): UnifiedSession | null {
   const parsed = parseRaw(raw);
   if (!parsed || !parsed.contents.length) return null;
+  const SOURCE: Source = source;
 
   const nodes: SessionNode[] = [];
   let model = parsed.model;
@@ -165,7 +172,7 @@ export function parseGeminiSession(
       const text = partsText(parts, { thought: false });
       if (!text) continue;
       messageCount++;
-      const id = `gemini:${i++}`;
+      const id = `${SOURCE}:${i++}`;
       nodes.push({ id, parentId: prevId, role: "user", source: SOURCE, timestamp: null, text });
       if (!title) title = text.replace(/\s+/g, " ").trim().slice(0, 80);
       prevId = id;
@@ -181,7 +188,7 @@ export function parseGeminiSession(
 
     if (text || thinking) {
       messageCount++;
-      const id = `gemini:${i++}`;
+      const id = `${SOURCE}:${i++}`;
       nodes.push({
         id,
         parentId: prevId,
@@ -201,7 +208,7 @@ export function parseGeminiSession(
       const name = c.functionCall?.name ?? "function";
       const args = c.functionCall?.args;
       const tool: ToolInfo = { name, input: args, files: filesFromArgs(args) };
-      const id = `gemini:${i++}`;
+      const id = `${SOURCE}:${i++}`;
       const toolNode: SessionNode = {
         id,
         parentId: prevId,
@@ -217,7 +224,7 @@ export function parseGeminiSession(
   }
 
   if (!nodes.length) return null;
-  if (!title) title = "(untitled Gemini session)";
+  if (!title) title = `(untitled ${LABELS[source]} session)`;
 
   const summary: SessionSummary = {
     id: parsed.sessionId || filePath,
@@ -234,4 +241,12 @@ export function parseGeminiSession(
   };
 
   return { ...summary, nodes };
+}
+
+/** Qwen Code is a Gemini CLI fork with the identical on-disk format. */
+export function parseQwenSession(
+  raw: string,
+  filePath: string,
+): UnifiedSession | null {
+  return parseGeminiSession(raw, filePath, "qwen");
 }

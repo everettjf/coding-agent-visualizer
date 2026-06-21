@@ -104,6 +104,33 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
     ];
   }, [a, b, sa, sb]);
 
+  // Structural shape of the run — not captured by the raw metric totals.
+  const structure = useMemo<Metric[] | null>(() => {
+    if (!a || !b || !sa || !sb) return null;
+    const shape = (s: typeof a) => {
+      let sidechain = 0;
+      let errors = 0;
+      let maxDepth = 0;
+      const depth = new Map<string, number>();
+      for (const n of s.nodes) {
+        const d = n.parentId && depth.has(n.parentId) ? depth.get(n.parentId)! + 1 : 0;
+        depth.set(n.id, d);
+        if (d > maxDepth) maxDepth = d;
+        if (n.isSidechain) sidechain++;
+        if (n.tool?.isError) errors++;
+      }
+      return { sidechain, errors, maxDepth };
+    };
+    const xa = shape(a);
+    const xb = shape(b);
+    return [
+      { label: "Sub-agent nodes", a: xa.sidechain, b: xb.sidechain, fmt: String },
+      { label: "Reasoning blocks", a: sa.totals.reasoning, b: sb.totals.reasoning, fmt: String },
+      { label: "Max call depth", a: xa.maxDepth, b: xb.maxDepth, fmt: String },
+      { label: "Tool errors", a: xa.errors, b: xb.errors, fmt: String, lowerBetter: true },
+    ];
+  }, [a, b, sa, sb]);
+
   const tools = useMemo(() => {
     if (!sa || !sb) return null;
     const names = new Set([...sa.tools.map((t) => t.name), ...sb.tools.map((t) => t.name)]);
@@ -149,6 +176,24 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
               </div>
             ))}
           </div>
+
+          {structure && (
+            <section className="mt-4 rounded-xl border border-border bg-panel p-4">
+              <h3 className="mb-3 text-sm font-semibold">Structure</h3>
+              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 gap-y-1 text-sm">
+                {structure.map((m) => (
+                  <div key={m.label} className="contents">
+                    <div className="border-t border-border py-1.5">{m.label}</div>
+                    <div className="border-t border-border py-1.5 text-right tabular-nums">{m.fmt(m.a)}</div>
+                    <div className="border-t border-border py-1.5 text-right tabular-nums">{m.fmt(m.b)}</div>
+                    <div className="border-t border-border py-1.5 text-right tabular-nums">
+                      <Delta m={m} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {tools && tools.length > 0 && (
             <section className="mt-4 rounded-xl border border-border bg-panel p-4">
