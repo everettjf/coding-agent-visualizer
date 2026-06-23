@@ -39,7 +39,8 @@
     "build:demo": "bun build src/frontend/demo.html --outdir docs/demo --public-path ./",
     "compile": "bun build --compile --minify --outfile dist/coding-agent-visualizer src/server/index.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "release": "bun scripts/release.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
